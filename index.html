@@ -101,6 +101,7 @@ footer button{background:none;border:0;color:var(--teal);cursor:pointer;font:inh
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const EMBED=/*DATA*/null;
+const WRAP_MEIA_NOITE=false; // true = somar 24h quando a hora fim é menor que a hora início (o BI não faz isso)
 const META_PESSOA=5.2,EFETIVO_HIST=9; // medidas [Meta m² Pessoa] e [Efetivo Histograma] do Power BI
 function hDia(d){const w=new Date(d+'T00:00:00Z').getUTCDay();return w>=1&&w<=4?9:w===5?8:0} // RPT_HHT Disponível: seg-qui 9h, sex 8h, fim de semana 0
 function mm(d){const y=+d.slice(0,4),m=+d.slice(5,7);if(+d.slice(8,10)>=21){const t=new Date(Date.UTC(y,m,1));return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')}return d.slice(0,7)} // Mes_Medicao_Num: dia 21 em diante conta no mês seguinte
@@ -129,22 +130,23 @@ let M,F,page,charts=[],post=[],cid=0,C={};
 function build(S){
  const m={};m.sites={};T(S,'Sites').forEach(r=>{if(r.Site)m.sites[r.Site]=r.Corredor});
  const corr=s=>s?(m.sites[s]||'(Sem corredor)'):'(Sem nota)';
- const pl=p=>p==null||p===''?'(Em branco)':(Number(p)?'True':'False');
+ const pl=p=>p==null||p===''?'(Em branco)':(Number(p)?'TRUE':'FALSE');
  m.cart=T(S,'Carteira Atividades').filter(r=>r.Nota!=null).map(r=>({nota:nid(r.Nota),site:r.Site,local:r.Local,ativo:r.Ativo,plano:pl(r.Plano),prio:r.Prioridade,venc:iso(r['Vencimento SAP']),prev:r['Área Prevista']==null?null:num(r['Área Prevista']),del:r['Área Delineada']==null?null:num(r['Área Delineada']),status:r.Status,om:iso(r.OM),cron:iso(r.Cronograma),pto:iso(r.PTO),orc:iso(r['Orçamento']),tas:iso(r.TAS),tep:iso(r.TEP),rip:iso(r.RIP)}));
  m.cart.forEach(r=>r.corr=corr(r.site));
  const ni={};m.cart.forEach(r=>{if(!ni[r.nota])ni[r.nota]=r});
- const enr=(r,nota)=>{const c=ni[nota];r.nota=nota;r.site=c?c.site:null;r.ativo=c?c.ativo:null;r.plano=c?c.plano:null;r.corr=corr(r.site);return r};
+ const enr=(r,nota)=>{const c=ni[nota];r.nota=nota;r.site=c?c.site:null;r.ativo=c?c.ativo:null;r.plano=c?c.plano:null;r.prio=c?c.prio:null;r.corr=corr(r.site);return r};
  m.exec=T(S,'Execucao Diaria').filter(r=>iso(r.Data)).map(r=>enr({d:iso(r.Data),etapa:r.Etapa,area:num(r['Área']),obs:r['Observação']||''},r.Nota==null?'':nid(r.Nota)));
  m.ef=T(S,'Efetivo').filter(r=>iso(r.Data)).map(r=>({d:iso(r.Data),site:r.Site,corr:corr(r.Site),n:num(r.Efetivo)}));
  const tw={};T(S,'Tabela Wrench Time').forEach(r=>{if(r['Código']!=null&&!tw[r['Código']])tw[r['Código']]={desc:r['Descrição'],grupo:r.Grupo}});
- const dur=(a,b)=>{let x=hrs(b)-hrs(a);if(x<0)x+=24;return x};
- m.wt=[];T(S,'Wrench Time').forEach(r=>{const d=iso(r.Data);if(!d||r['Código']==null)return;const h=dur(r['Hora Início'],r['Hora Fim']);if(isNaN(h))return;
-  const t=tw[r['Código']]||{desc:'Código '+r['Código'],grupo:'(Sem grupo)'};const n=num(r.Efetivos);
-  m.wt.push(enr({d,h,n,hht:h*n,desc:String(t.desc).trim(),grupo:t.grupo},r.Nota==null?'':nid(r.Nota)))});
+ const dur=(a,b)=>{const mi=v=>Math.floor(Math.round(hrs(v)*3600)/60);let x=(mi(b)-mi(a))/60;if(WRAP_MEIA_NOITE&&x<0)x+=24;return x}; // DATEDIFF(...,MINUTE)/60
+ m.wt=[];T(S,'Wrench Time').forEach(r=>{const d=iso(r.Data);if(!d)return;const h=dur(r['Hora Início'],r['Hora Fim']);if(isNaN(h))return;
+  const t=r['Código']==null?null:tw[r['Código']];const n=num(r.Efetivos);
+  m.wt.push(enr({d,h,n,hht:h*n,desc:t&&t.desc!=null?String(t.desc).trim():null,grupo:t?t.grupo:null},r.Nota==null?'':nid(r.Nota)))});
  m.imp=T(S,'Registro Impactos').filter(r=>iso(r.Data)).map(r=>{const h=dur(r['Hora Início'],r['Hora Fim']);return{d:iso(r.Data),site:r.Site,corr:corr(r.Site),h:isNaN(h)?0:h,grupo:r.Grupo||'(Em branco)',impacto:r.Impacto||'(Em branco)',desc:r['Descrição']||''}});
  m.meta=T(S,'Meta Mensal').filter(r=>r['Mês Medição']!=null).map(r=>{const s=String(r['Mês Medição']);return{ym:s.slice(0,4)+'-'+s.slice(4,6),v:num(r['Meta m²']),corr:r.Corredor}});
  m.tint={};T(S,'Dim Tintas').forEach(r=>{if(r['Código']!=null)m.tint[r['Código']]={nome:r.Nome,l:num(r.Litros)}});
  m.mist={};T(S,'Dim Misturas').forEach(r=>{if(!r.Sistema)return;(m.mist[r.Sistema]=m.mist[r.Sistema]||[]).push({cod:r['Código'],comp:r.Componente,prop:num(r['Proporção'])||1})});
+ m.tipoAca=(T(S,'Tabela Etapa').find(r=>r.Etapa==='Acabamento')||{}).Tipo||'Acabamento';m.prios=uniq(m.cart.map(r=>r.prio||'(Em branco)')).sort();
  m.sist=T(S,'Dim Sistemas').filter(r=>r.Sistema).map(r=>({nome:r.Sistema,min:num(r['Estoque Mínimo']),ideal:num(r['Estoque Ideal']),sv:num(r.SV),efs:num(r.EFS),fp:num(r.FP),fam:r['Família'],cor:r.Cor,crit:num(r['Dias Crítico']),aten:num(r['Dias Atenção'])}));
  m.fato=T(S,'Fato Tintas').filter(r=>iso(r.Data)).map(r=>({d:iso(r.Data),tipo:r.Tipo,cod:r['Código'],q:num(r.Quantidade),corr:r.Corredor}));
  const all=[...m.exec.map(r=>r.d),...m.wt.map(r=>r.d),...m.imp.map(r=>r.d)].sort();
@@ -154,20 +156,21 @@ function build(S){
  return m}
 
 /* ---------- filtros ---------- */
-const newF=()=>({per:new Set(),cor:new Set(),site:new Set(),ativo:new Set(),plano:new Set()});
+const newF=()=>({per:new Set(),cor:new Set(),site:new Set(),ativo:new Set(),plano:new Set(),prio:new Set()});
 function pass(r,o){
  if(o.per&&F.per.size&&!F.per.has(mm(r.d)))return false;
  if(o.geo){if(F.cor.size&&!F.cor.has(r.corr))return false;if(F.site.size&&!F.site.has(r.site))return false}
  if(o.ativo&&F.ativo.size&&!F.ativo.has(r.ativo))return false;
- if(o.plano&&F.plano.size&&!F.plano.has(r.plano))return false;return true}
+ if(o.plano&&F.plano.size&&!F.plano.has(r.plano))return false;
+ if(o.plano&&F.prio.size&&!F.prio.has(r.prio||'(Em branco)'))return false;return true}
 const FL={all:{per:1,geo:1,ativo:1,plano:1}};
 const PAGES=[
  {id:'visao-geral',name:'Visão Geral',f:{per:1,geo:1,ativo:1,plano:1},fn:pgGeral},
  {id:'report-diario',name:'Report Diário',f:null,fn:pgDia},
  {id:'wrench-time',name:'Wrench Time',f:{per:1,geo:1,ativo:1,plano:1},fn:pgWrench},
- {id:'impactos',name:'Impactos',f:{per:1,geo:1},fn:pgImp},
- {id:'controle-de-tintas',name:'Controle de Tintas',f:{geo:1},fn:pgTintas},
- {id:'carteira',name:'Carteira',f:{geo:1,ativo:1,plano:1},fn:pgCart}];
+ {id:'impactos',name:'Impactos',f:{per:1,geo:1,ativo:1,plano:1},fn:pgImp},
+ {id:'controle-de-tintas',name:'Controle de Tintas',f:{per:1,geo:1,ativo:1,plano:1},fn:pgTintas},
+ {id:'carteira',name:'Carteira',f:{per:1,geo:1,ativo:1,plano:1},fn:pgCart}];
 function ddHTML(id,label,items,on){
  const sel=items.filter(i=>i.set.has(i.v)),txt=!sel.length?'Todos':sel.length===1?sel[0].label:sel.length+' selecionados';
  let h=`<div class="dd${on?'':' off'}" ${on?'':'title="Este filtro não se aplica a esta página"'}><label>${label}</label><button type="button" data-dd="${id}" aria-haspopup="true">${esc(txt)}</button><div class="pn" hidden data-pn="${id}"><button class="clr" type="button" data-clr="${id}">Limpar seleção</button>`;
@@ -179,8 +182,9 @@ function renderFilters(){
  DD.per=M.months.map(m=>({v:m,label:m.slice(5)+'/'+m.slice(0,4),set:F.per}));
  DD.geo=[...M.corrs.map(c=>({g:'Corredor',v:c,label:c,set:F.cor})),...M.siteList.map(s=>({g:'Site',v:s,label:s,set:F.site}))];
  DD.ativo=M.ativos.map(a=>({v:a,label:a,set:F.ativo}));
- DD.plano=['True','False','(Em branco)'].map(a=>({v:a,label:a,set:F.plano}));
- $('#filters').innerHTML=page.f?ddHTML('per','Período Medição',DD.per,p.per)+ddHTML('geo','Corredor, Site',DD.geo,p.geo)+ddHTML('ativo','Ativo',DD.ativo,p.ativo)+ddHTML('plano','Plano Diretor',DD.plano,p.plano):''}
+ DD.prio=M.prios.map(a=>({v:a,label:a,set:F.prio}));
+ DD.plano=['TRUE','FALSE','(Em branco)'].map(a=>({v:a,label:a,set:F.plano}));
+ $('#filters').innerHTML=page.f?ddHTML('per','Período Medição',DD.per,p.per)+ddHTML('geo','Corredor, Site',DD.geo,p.geo)+ddHTML('ativo','Ativo',DD.ativo,p.ativo)+ddHTML('plano','Plano Diretor',DD.plano,p.plano)+ddHTML('prio','Prioridade',DD.prio,p.plano):''}
 $('#filters').addEventListener('click',e=>{
  const b=e.target.closest('[data-dd]');
  if(b){const pn=b.nextElementSibling,was=pn.hidden;document.querySelectorAll('.pn').forEach(x=>x.hidden=true);pn.hidden=!was;return}
@@ -271,65 +275,88 @@ function pgDia(){
 /* ---------- Wrench Time ---------- */
 function pgWrench(){
  const W=M.wt.filter(r=>pass(r,{per:1,geo:1,ativo:1,plano:1}));if(!W.length)return card('c12','',empty);
- const byDesc=grpSum(W,r=>r.desc,r=>r.hht),byG=grpSum(W,r=>r.grupo,r=>r.hht);
- const dm={};W.forEach(r=>{const x=dm[r.d]=dm[r.d]||{h:0,n:new Set()};x.h+=r.h;x.n.add(r.nota||'-')});
- const dk=Object.keys(dm).sort();
- let h=card('c6','Duração total em horas por descrição (HHT)',donut(byDesc,320,{unit:'HHT'}));
- h+=card('c6','Tempo médio em horas por dia',ch(320,{grid:{left:40,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value',name:'h/equipe',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' h'},series:[{type:'line',smooth:false,showSymbol:false,lineStyle:{color:C.teal,width:2},areaStyle:{color:C.teal,opacity:.1},data:dk.map(d=>+(dm[d].h/dm[d].n.size).toFixed(2))}]})+`<div class="note">Horas apontadas no dia divididas pelo número de notas (equipes) com apontamento.</div>`);
- h+=card('c5','Duração total em horas por grupo (HHT)',donut(byG,300,{unit:'HHT'}));
+ const byDesc=grpSum(W.filter(r=>r.desc!=null),r=>r.desc,r=>r.hht),byG=grpSum(W.filter(r=>r.grupo!=null),r=>r.grupo,r=>r.hht);
+ // Tempo Médio por Colaborador = HHT do dia ÷ maior efetivo lançado no dia
+ const efMax={};M.ef.filter(r=>pass(r,{per:1,geo:1})).forEach(r=>{efMax[r.d]=Math.max(efMax[r.d]??-Infinity,r.n)});
+ const dm={};W.forEach(r=>{dm[r.d]=(dm[r.d]||0)+r.hht});
+ const dk=Object.keys(dm).sort().filter(d=>efMax[d]>0);
+ let h=card('c6','Duração total em horas por descrição (HHT)',byDesc.length?donut(byDesc,320,{unit:'HHT'}):empty);
+ h+=card('c6','Tempo médio em horas por dia',dk.length?ch(320,{grid:{left:44,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value',name:'Horas',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' h'},series:[{type:'line',symbolSize:6,data:dk.map(d=>+(dm[d]/efMax[d]).toFixed(4)),itemStyle:{color:C.teal},lineStyle:{color:C.teal}}]}):empty);
+ h+=card('c5','Duração total em horas por grupo (HHT)',byG.length?donut(byG,300,{unit:'HHT'}):empty);
  const tot=sum(byDesc,r=>r.value);
- h+=card('c7','Detalhe por descrição',`<div class="tw tall"><table><thead><tr><th>Descrição</th><th class="n">HHT</th><th class="n">%</th></tr></thead><tbody>${byDesc.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${nf(r.value)}</td><td class="n">${nf(r.value/tot*100,1)}%</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${nf(tot)}</td><td></td></tr></tbody></table></div>`);
+ h+=card('c7','Detalhe por descrição',`<div class="tw tall"><table><thead><tr><th>Descrição</th><th class="n">HHT</th></tr></thead><tbody>${byDesc.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${nf(r.value)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${nf(tot)}</td></tr></tbody></table></div>`);
  return h}
 
 /* ---------- Impactos ---------- */
 function pgImp(){
- const I=M.imp.filter(r=>pass(r,{per:1,geo:1}));if(!I.length)return card('c12','',empty);
- const bi=grpSum(I,r=>r.impacto,r=>r.h),tot=sum(I,r=>r.h);
- let h=card('c6','Horas perdidas por impacto',ch(320,{grid:{left:44,right:10,top:20,bottom:100},dataZoom:[{type:'inside'}],xAxis:ax({type:'category',data:bi.map(r=>r.name),axisLabel:{color:C.muted,rotate:60,interval:0,width:90,overflow:'truncate'},splitLine:{show:false}}),yAxis:ax({type:'value',name:'Horas',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' h'},series:[{type:'bar',data:bi.map(r=>+r.value.toFixed(2)),itemStyle:{color:C.teal,borderRadius:[3,3,0,0]},barMaxWidth:22}]}));
+ const I=M.imp.filter(r=>pass(r,{per:1,geo:1})),E=M.exec.filter(r=>pass(r,{per:1,geo:1,ativo:1,plano:1}));
+ if(!I.length&&!E.length)return card('c12','',empty);
+ const tot=sum(I,r=>r.h),bi=grpSum(I,r=>r.impacto,r=>r.h),Ig=I.filter(r=>r.grupo!=='(Em branco)'),bl=v=>v==='(Em branco)'?'':v;
+ let h=card('c3','Horas de impacto',`<div class="kpis">${kpi(tot,'Horas Impacto')}</div>`);
+ h+=card('c9','Horas perdidas por impacto',bi.length?ch(260,{grid:{left:44,right:10,top:20,bottom:100},dataZoom:[{type:'inside'}],xAxis:ax({type:'category',data:bi.map(r=>bl(r.name)),axisLabel:{color:C.muted,rotate:60,interval:0,width:90,overflow:'truncate'},splitLine:{show:false}}),yAxis:ax({type:'value',name:'Horas',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' h'},series:[{type:'bar',data:bi.map(r=>+r.value.toFixed(2)),itemStyle:{color:C.teal}}]}):empty);
  const dm={};I.forEach(r=>dm[r.d]=(dm[r.d]||0)+r.h);const dk=Object.keys(dm).sort();
- h+=card('c6','Horas de impacto por dia',ch(320,{grid:{left:44,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value',name:'Horas',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' h'},series:[{type:'line',showSymbol:false,lineStyle:{color:C.teal,width:2},areaStyle:{color:C.teal,opacity:.1},data:dk.map(d=>+dm[d].toFixed(2))}]}));
- h+=card('c5','Horas impacto por grupo',donut(grpSum(I,r=>r.grupo,r=>r.h),320,{unit:'h',center:nf(tot)}));
- const rows=[...I].sort((a,b)=>b.d.localeCompare(a.d));
- h+=card('c7','Registro',`<div class="tw tall"><table><thead><tr><th>Data</th><th class="n">Horas</th><th>Grupo</th><th>Impacto</th><th>Descrição</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fd(r.d)}</td><td class="n">${nf(r.h)}</td><td>${esc(r.grupo)}</td><td>${esc(r.impacto)}</td><td class="wrap">${esc(r.desc)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${nf(tot)}</td><td colspan="3"></td></tr></tbody></table></div>`);
+ h+=card('c6','Horas de impacto por dia',dk.length?ch(320,{grid:{left:44,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value',name:'Horas',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' h'},series:[{type:'line',symbolSize:6,data:dk.map(d=>+dm[d].toFixed(2)),itemStyle:{color:C.teal},lineStyle:{color:C.teal}}]}):empty);
+ h+=card('c6','Horas impacto por grupo',Ig.length?donut(grpSum(Ig,r=>r.grupo,r=>r.h),320,{unit:'h',center:nf(sum(Ig,r=>r.h))}):empty);
+ const rows=[...I].sort((a,b)=>String(a.desc).localeCompare(String(b.desc),'pt-BR'));
+ h+=card('c7','Registro',`<div class="tw tall"><table><thead><tr><th>Data</th><th class="n">Horas</th><th>Grupo</th><th>Impacto</th><th>Descrição</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fd(r.d)}</td><td class="n">${nf(r.h)}</td><td>${esc(bl(r.grupo))}</td><td>${esc(bl(r.impacto))}</td><td class="wrap">${esc(r.desc)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${nf(tot)}</td><td></td><td></td><td></td></tr></tbody></table></div>`);
+ const yd={};E.filter(r=>r.etapa==='Acabamento').forEach(r=>yd[r.d]=(yd[r.d]||0)+r.area);
+ const pts=Object.keys(dm).filter(d=>d in yd).sort().map(d=>[+dm[d].toFixed(2),+yd[d].toFixed(2),d]);
+ h+=card('c5','Horas de impacto x Área Acabamento por dia',pts.length?ch(300,{grid:{left:54,right:14,top:20,bottom:44},xAxis:ax({type:'value',name:'Horas Impacto',nameLocation:'middle',nameGap:26,nameTextStyle:{color:C.muted}}),yAxis:ax({type:'value',name:'Área Acabamento (m²)',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'item',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},confine:true,formatter:p=>`${fd(p.data[2])}<br>Impacto: <b>${nf(p.data[0])} h</b><br>Acabamento: <b>${nf(p.data[1])} m²</b>`},series:[{type:'scatter',symbolSize:9,data:pts,itemStyle:{color:C.teal}}]}):empty);
+ const ag=grpSum(E.filter(r=>r.etapa==='Acabamento'),r=>r.ativo||'(Em branco)',r=>r.area).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')),ta=sum(ag,r=>r.value);
+ h+=card('c12','Área Acabamento por Ativo',ag.length?`<div class="tw"><table><thead><tr><th>Ativo</th><th class="n">${esc(M.tipoAca)}</th><th class="n">Total</th></tr></thead><tbody>${ag.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${nf(r.value)}</td><td class="n">${nf(r.value)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${nf(ta)}</td><td class="n">${nf(ta)}</td></tr></tbody></table></div>`:empty);
  return h}
 
 /* ---------- Controle de Tintas ---------- */
 function pgTintas(){
- const ca=corrAllowed(),Fa=M.fato.filter(r=>!ca||ca.has(r.corr));
+ const ca=corrAllowed(),corrs=(ca?[...ca]:uniq(Object.values(M.sites))).sort();
+ const Fa=M.fato.filter(r=>corrs.includes(r.corr)&&(!F.per.size||F.per.has(mm(r.d))));
  if(!Fa.length)return card('c12','',empty);
- const stk={};Fa.forEach(r=>{const k=r.cod+'|'+r.corr;stk[k]=(stk[k]||0)+(r.tipo==='Entrada'?r.q:-r.q)});
- const corrs=uniq(Fa.map(r=>r.corr)).sort(),ds=Fa.map(r=>r.d).sort(),dias=Math.max(1,Math.round((new Date(ds[ds.length-1])-new Date(ds[0]))/864e5)+1);
- const litD={};Fa.filter(r=>r.tipo==='Saída').forEach(r=>{const l=(M.tint[r.cod]||{l:0}).l;litD[r.d]=(litD[r.d]||0)+r.q*l});
- const consTot=sum(Object.values(litD))/dias;
- const S=M.sist.map(s=>{const comp=M.mist[s.nome]||[];const kitL=sum(comp,c=>(M.tint[c.cod]||{l:0}).l*c.prop);
-  const kc={};corrs.forEach(c=>{kc[c]=comp.length?Math.max(0,Math.floor(Math.min(...comp.map(x=>(stk[x.cod+'|'+c]||0)/x.prop)))):0});
-  const kits=sum(Object.values(kc)),litros=kits*kitL,cov=s.efs?s.sv*10/s.efs:0,m2=litros*cov*(1-s.fp/100);
-  const a=comp.find(c=>c.comp==='A')||comp[0],saiKits=a?sum(Fa.filter(r=>r.tipo==='Saída'&&r.cod===a.cod),r=>r.q)/a.prop:0;
-  const cons=saiKits*kitL/dias,dd=cons>0?litros/cons:null;
-  let st='Normal',col=C.green;const mon=s.crit>0||s.aten>0;
-  if(kits===0){st='Sem estoque';col=C.grey;if(mon){st='Crítico';col=C.red}}else if(mon&&dd!=null){if(dd<=s.crit){st='Crítico';col=C.red}else if(dd<=s.aten){st='Atenção';col=C.amber}}
-  return{...s,kc,kits,litros,m2,cons,dd,st,col}});
- const act=S.filter(s=>s.kits>0),litT=sum(S,s=>s.litros),consSist=sum(S,s=>s.cons),crit=S.filter(s=>s.st==='Crítico').length;
- let h=card('c4','Estoque',`<div class="kpis">${kpi(act.length,'Sistemas em Estoque').replace(/(\d+),00/,'$1')}${kpi(sum(S,s=>s.kits),'Kits Totais').replace(/,00/,'')}${kpi(litT,'Litros Totais')}</div>`);
- h+=card('c5','Consumo e autonomia',`<div class="kpis">${kpi(consTot,'Consumo Médio (Litros/Dia)')}${kpi(consSist>0?litT/consSist:null,'Autonomia Estoque (Dias)').replace(/,\d\d</,'<')}</div>`);
- h+=card('c3','Alerta',`<div class="kpis"><div class="kpi"><b class="${crit?'neg':''}">${crit?crit:'Nenhum'}</b><span>Sistemas Críticos</span></div></div>`);
- const sorted=[...S].sort((a,b)=>a.kits-b.kits);
- h+=card('c6','Kits disponíveis por sistema e corredor',ch(Math.max(260,S.length*34+60),{legend:{bottom:0,textStyle:{color:C.muted},icon:'roundRect'},grid:{left:150,right:20,top:10,bottom:50},xAxis:ax({type:'value',name:'Kits Disponíveis',nameLocation:'middle',nameGap:26,nameTextStyle:{color:C.muted}}),yAxis:ax({type:'category',data:sorted.map(s=>s.nome),splitLine:{show:false},axisLabel:{color:C.muted,width:140,overflow:'truncate'}}),tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink}},series:corrs.map((c,i)=>({name:c,type:'bar',stack:'k',data:sorted.map(s=>s.kc[c]),itemStyle:{color:[C.teal,C.amber,C.navy,C.blue][i%4],borderColor:C.card,borderWidth:1},barMaxWidth:20}))}));
- const dk=Object.keys(litD).sort();
- h+=card('c6','Evolução do consumo (litros por dia)',ch(Math.max(260,S.length*34+60),{grid:{left:44,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value'}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' L'},series:[{type:'line',showSymbol:true,symbolSize:5,lineStyle:{color:C.teal,width:2},itemStyle:{color:C.teal},data:dk.map(d=>+litD[d].toFixed(1))}]}));
- const fams=uniq(S.map(s=>s.fam));let tb='';
- fams.forEach(f=>{const R=S.filter(s=>s.fam===f);tb+=`<tr class="fam"><td>${esc(f)}</td><td class="n">${nf(sum(R,s=>s.kits),0)}</td><td class="n">${nf(sum(R,s=>s.litros))}</td><td class="n">${nf(sum(R,s=>s.m2))}</td><td class="n"></td><td></td></tr>`;
-  R.forEach(s=>tb+=`<tr><td style="padding-left:26px">${esc(s.cor)}</td><td class="n">${nf(s.kits,0)}</td><td class="n">${nf(s.litros)}</td><td class="n">${nf(s.m2)}</td><td class="n">${s.dd==null?'–':nf(s.dd,0)}</td><td><span class="pill"><i style="background:${s.col}"></i>${s.st}</span></td></tr>`)});
- h+=card('c12','Estoque por família e cor',`<div class="tw tall"><table><thead><tr><th>Família</th><th class="n">Kits Disponíveis</th><th class="n">Litros Disponíveis</th><th class="n">Autonomia m²</th><th class="n">Autonomia Dias</th><th>Status Estoque</th></tr></thead><tbody>${tb}</tbody></table></div><div class="note">Kit = componentes A + B de cada mistura; o estoque do sistema é o menor estoque entre seus componentes. Autonomia m² = litros × (SV × 10 ÷ EFS) × (1 − perda). Dias = litros ÷ consumo médio diário do sistema.</div>`);
+ const E=M.exec.filter(r=>pass(r,{per:1,geo:1,ativo:1,plano:1})),dias=new Set(E.map(r=>r.d)).size,media=dias?acaA(E)/dias:0; // [Média Produção Diária]
+ const lit=c=>(M.tint[c]||{l:0}).l,all=Object.keys(M.mist);
+ const sal={};Fa.forEach(r=>{const k=r.cod+'|'+r.corr;sal[k]=(sal[k]||0)+(r.tipo==='Entrada'?r.q:r.tipo==='Saída'?-r.q:0)});
+ const saldo=(c,k)=>sal[c+'|'+k]||0;
+ const rowsOf=ns=>ns.flatMap(n=>M.mist[n]||[]);
+ const kitsC=(ns,k)=>{const R=rowsOf(ns);return R.length?Math.floor(Math.min(...R.map(x=>saldo(x.cod,k)/x.prop))):0}; // INT(MINX(saldo/proporção))
+ const kitsF=ns=>sum(corrs,k=>kitsC(ns,k));                 // [Kits Disponíveis]
+ const litKit=ns=>sum(rowsOf(ns),x=>lit(x.cod)*x.prop);       // [Litros por Kit]
+ const litTot=ns=>sum(ns,n=>kitsF([n])*litKit([n]));          // [Litros Totais]
+ const sysRows=ns=>M.sist.filter(s=>ns.includes(s.nome));
+ const rend=ns=>{const R=sysRows(ns);if(!R.length)return 0;const sv=Math.max(...R.map(s=>s.sv)),efs=Math.max(...R.map(s=>s.efs)),fp=Math.max(...R.map(s=>s.fp))/100;return efs?sv*10/efs*(1-fp):0}; // [Rendimento Prático]
+ const m2=ns=>litTot(ns)*rend(ns);                            // [Autonomia m²]
+ const aut=ns=>media?Math.trunc(m2(ns)/media):0;              // [Autonomia (Dias de Produção Mensal)]
+ const sel=a=>{const u=uniq(a);return u.length===1?u[0]:0};   // SELECTEDVALUE
+ const stat=ns=>{const R=sysRows(ns),d=aut(ns),cr=sel(R.map(s=>s.crit)),at=sel(R.map(s=>s.aten));return d===0?'⚫ Sem estoque':d<cr?'🔴 Crítico':d<at?'🟡 Atenção':'🟢 Normal'};
+ const consS=n=>{const cods=new Set((M.mist[n]||[]).map(x=>String(x.cod)));return sum(Fa.filter(r=>r.tipo==='Saída'&&cods.has(String(r.cod))),r=>r.q*lit(r.cod))};
+ const consMed=dias?sum(all,consS)/dias:0;                     // [Consumo Médio Diário]
+ const kitsT=sum(all,n=>kitsF([n])),litT=litTot(all),emEst=all.filter(n=>kitsF([n])>0).length;
+ const crit=all.filter(n=>{const s=stat([n]);return s==='🔴 Crítico'||s==='⚫ Sem estoque'}).length;
+ const k0=(v,l)=>kpi(v,l).replace(/,00<\/b>/,'</b>');
+ let h=card('c4','Estoque',`<div class="kpis">${k0(emEst,'Sistemas em Estoque')}${k0(kitsT,'Kits Totais')}${kpi(litT,'Litros Totais')}</div>`);
+ h+=card('c5','Consumo e autonomia',`<div class="kpis">${kpi(consMed,'Consumo Médio (Litros/Dia)')}${k0(aut(all),'Autonomia Estoque (Dias)')}</div>`);
+ h+=card('c3','Alerta',`<div class="kpis"><div class="kpi"><b class="${crit?'neg':''}">${crit}</b><span>Sistemas Críticos</span></div></div>`);
+ const kS=all.map(n=>({n,v:corrs.map(k=>kitsC([n],k))})).sort((a,b)=>sum(a.v)-sum(b.v));
+ h+=card('c6','Kits disponíveis por sistema e corredor',ch(Math.max(260,all.length*34+60),{legend:{bottom:0,textStyle:{color:C.muted},icon:'roundRect'},grid:{left:170,right:20,top:10,bottom:50},xAxis:ax({type:'value',name:'Kits Disponíveis',nameLocation:'middle',nameGap:26,nameTextStyle:{color:C.muted}}),yAxis:ax({type:'category',data:kS.map(x=>x.n),splitLine:{show:false},axisLabel:{color:C.muted,width:150,overflow:'truncate'}}),tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},confine:true},series:corrs.map((k,i)=>({type:'bar',stack:'k',name:k,data:kS.map(x=>x.v[i]),itemStyle:{color:C.pal[i%C.pal.length]}}))}));
+ const litD={};Fa.filter(r=>r.tipo==='Saída').forEach(r=>{litD[r.d]=(litD[r.d]||0)+r.q*lit(r.cod)});const dk=Object.keys(litD).sort();
+ h+=card('c6','Saídas de tinta (litros por dia)',ch(Math.max(260,all.length*34+60),{grid:{left:44,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value'}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' L'},series:[{type:'line',symbolSize:5,data:dk.map(d=>+litD[d].toFixed(2)),itemStyle:{color:C.teal},lineStyle:{color:C.teal}}]}));
+ const mk=(label,ns)=>({label,ns,kits:kitsF(ns),lit:kitsF(ns)*litKit(ns),m2:m2(ns),dias:aut(ns),st:stat(ns)});
+ const byStat=(a,b)=>a.st<b.st?-1:a.st>b.st?1:0;
+ const fams=uniq(M.sist.map(s=>s.fam)).map(f=>({...mk(f,M.sist.filter(s=>s.fam===f).map(s=>s.nome)),cores:uniq(M.sist.filter(s=>s.fam===f).map(s=>s.cor)).map(c=>mk(c,M.sist.filter(s=>s.fam===f&&s.cor===c).map(s=>s.nome))).sort(byStat)})).sort(byStat);
+ const tr=(x,cls,pad)=>`<tr class="${cls}"><td${pad?' style="padding-left:26px"':''}>${esc(x.label)}</td><td class="n">${nf(x.kits,0)}</td><td class="n">${nf(x.lit)}</td><td class="n">${nf(x.m2)}</td><td class="n">${nf(x.dias,0)}</td><td>${x.st}</td></tr>`;
+ let tb='';fams.forEach(f=>{tb+=tr(f,'fam');f.cores.forEach(c=>tb+=tr(c,'',1))});
+ tb+=tr(mk('Total',M.sist.map(s=>s.nome)),'tot');
+ h+=card('c12','Estoque por família e cor',`<div class="tw tall"><table><thead><tr><th>Família / Cor</th><th class="n">Kits Disponíveis</th><th class="n">Litros Disponíveis</th><th class="n">Autonomia m²</th><th class="n">Autonomia Dias</th><th>Status Estoque</th></tr></thead><tbody>${tb}</tbody></table></div><div class="note">Mesmas medidas do relatório: kits pelo menor componente (A/B) em cada corredor; nas linhas de família e no total, o relatório calcula o conjunto dos sistemas, e não a soma deles.</div>`);
  return h}
 
 /* ---------- Carteira ---------- */
 function pgCart(){
- const o={geo:1,ativo:1,plano:1},R=M.cart.filter(r=>String(r.status).toUpperCase()!=='CANCELADA'&&pass(r,o)).sort((a,b)=>(b.prev||0)-(a.prev||0));
+ const R=M.cart.filter(r=>r.status!=null&&String(r.status).toUpperCase()!=='CANCELADA'&&pass(r,{geo:1,ativo:1,plano:1}));
  if(!R.length)return card('c12','',empty);
- const cols=[['Nota','nota'],['Site','site'],['Local','local'],['Ativo','ativo'],['Plano Diretor','plano'],['Prioridade','prio'],['Vencimento SAP','venc','d'],['Área Prevista','prev','n'],['Área Delineada','del','n'],['Status','status'],['OM','om','d'],['Cronograma','cron','d'],['PTO','pto','d'],['Orçamento','orc','d'],['TAS','tas','d'],['TEP','tep','d'],['RIP','rip','d']];
+ const real={};M.exec.filter(r=>r.etapa==='Acabamento'&&pass(r,{per:1})).forEach(r=>real[r.nota]=(real[r.nota]||0)+r.area); // [Area Acabamento] = Área Realizada
+ const rows=R.map(r=>({...r,real:real[r.nota]??null})).sort((a,b)=>((a.prev==null)-(b.prev==null))||((b.prev||0)-(a.prev||0)));
+ const cols=[['Nota','nota'],['Site','site'],['Local','local'],['Ativo','ativo'],['Plano Diretor','plano'],['Prioridade','prio'],['Vencimento SAP','venc','d'],['Área Prevista','prev','n'],['Área Delineada','del','n'],['Área Realizada','real','n'],['Status','status']];
  const cell=(r,c)=>{const v=r[c[1]];if(c[2]==='n')return `<td class="n">${v==null?'':nf(v)}</td>`;if(c[2]==='d')return `<td>${fd(v)}</td>`;return `<td>${esc(v==='(Em branco)'?'':v)}</td>`};
- return card('c12','Carteira',`<div class="tw tall" style="max-height:640px"><table><thead><tr>${cols.map(c=>`<th class="${c[2]==='n'?'n':''}">${c[0]}</th>`).join('')}</tr></thead><tbody>${R.map(r=>`<tr>${cols.map(c=>cell(r,c)).join('')}</tr>`).join('')}<tr class="tot"><td>Total</td>${cols.slice(1).map(c=>c[1]==='prev'?`<td class="n">${nf(sum(R,r=>r.prev))}</td>`:c[1]==='del'?`<td class="n">${nf(sum(R,r=>r.del))}</td>`:'<td></td>').join('')}</tr></tbody></table></div>`)}
+ const ts=k=>nf(sum(rows,r=>r[k]));
+ return card('c12','Carteira',`<div class="tw tall" style="max-height:640px"><table><thead><tr>${cols.map(c=>`<th class="${c[2]==='n'?'n':''}">${c[0]}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>cell(r,c)).join('')}</tr>`).join('')}<tr class="tot"><td>Total</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="n">${ts('prev')}</td><td class="n">${ts('del')}</td><td class="n">${ts('real')}</td><td></td></tr></tbody></table></div>`)}
 
 /* ---------- app ---------- */
 function draw(){
