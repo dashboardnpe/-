@@ -231,7 +231,7 @@ function pgGeral(){
  const pTot=dd.length?sum(dd,d=>ad[d])/sum(dd,d=>efs[d]):null,pDia=dd.length?sum(dd,d=>ad[d]/efs[d])/dd.length:null;
  let h='';
  h+=card('c4','Produção (m²)',`<div class="kpis">${kpi(jat,'Área Jateamento')}${kpi(aca,'Área Acabamento')}${kpi(meta,'Meta Acumulada')}</div>`);
- h+=card('c5','Aderência à meta',`<div class="kpis"><div class="kpi"><b>${nf(meta?aca/meta*100:null)}%</b><span>Progresso</span></div>${kpi(aca-meta,'Desvio Meta',1)}${kpi(aca-metaPro,'Desvio Pro-rata',1)}</div>`);
+ h+=card('c5','Aderência à meta',`<div class="kpis"><div class="kpi"><b>${nf(meta?aca/meta*100:null)}%</b><span>Progresso</span></div>${kpi(aca-meta,'Desvio Meta',1)}${kpi(aca-metaPro,'Desvio Destino',1)}</div>`);
  h+=card('c3','Produtividade (m²/efetivo)',`<div class="kpis">${kpi(pDia,'Produtividade Diária')}${kpi(pTot,'Produtividade Total')}</div>`);
  h+=card('c4','Acabamento | Meta acumulada',ch(250,{series:[
   {type:'gauge',min:0,max:Math.max(meta,aca,1),startAngle:200,endAngle:-20,radius:'92%',center:['50%','62%'],progress:{show:true,width:22,itemStyle:{color:C.teal}},axisLine:{lineStyle:{width:22,color:[[1,C.track]]}},pointer:{show:false},axisTick:{show:false},splitLine:{show:false},axisLabel:{color:C.muted,distance:-34,formatter:v=>v===0||v>=Math.max(meta,aca,1)-1?nf(v,0):''},detail:{valueAnimation:false,offsetCenter:[0,'8%'],fontSize:30,fontFamily:'Barlow Condensed',color:C.ink,formatter:v=>nf(v)},data:[{value:+aca.toFixed(2)}]},
