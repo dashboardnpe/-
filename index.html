@@ -345,6 +345,13 @@ footer button{background:none;border:0;color:var(--teal);cursor:pointer;font:inh
  .card>.kpis .kpi span{font-size:11px}
 }
 
+.chart.clk{cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:8px;padding-bottom:2px;flex:0 0 auto}
+.chips[hidden]{display:none}
+.chips .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.chips button{font:inherit;font-size:12px;cursor:pointer;border-radius:999px;padding:3px 10px;border:1px solid var(--teal);background:var(--card);color:var(--ink)}
+.chips button.chip::after{content:" ×";color:var(--muted)}
+.chips button.clr2{border-color:var(--line);color:var(--muted)}
 /* O tema claro/escuro é controlado pelo botão do cabeçalho */
 :root[data-theme="light"]{color-scheme:light}
 body{background:var(--bg)}
@@ -371,6 +378,7 @@ body{background:var(--bg)}
  </div>
 </div>
 </div>
+<div class="wrap chips" id="chips" hidden></div>
 <main class="wrap" id="main"></main>
 <footer><span id="foot"></span><span><button id="reset" hidden>Voltar aos dados publicados</button></span></footer>
 <div id="toast" hidden></div>
@@ -437,10 +445,18 @@ function build(S){
  return m}
 
 /* ---------- filtros ---------- */
-const newF=()=>({per:new Set(),cor:new Set(),site:new Set(),ativo:new Set(),plano:new Set(),prio:new Set()});
+const newF=()=>({sem:new Set(),imp:new Set(),grp:new Set(),desc:new Set(),wgrp:new Set(),per:new Set(),cor:new Set(),site:new Set(),ativo:new Set(),plano:new Set(),prio:new Set()});
 function periodMatch(d){return !F.per.size||F.per.has('M:'+mm(d))||F.per.has('D:'+d)}
+function periodMonth(d){const ms=[...F.per].filter(v=>v[0]==='M');return !ms.length||F.per.has('M:'+mm(d))} // só os meses do filtro de período (ignora dias soltos)
+function tog(S,v){S.has(v)?S.delete(v):S.add(v);setTimeout(draw,0)} // clique no gráfico = liga/desliga o filtro
 function pass(r,o){
- if(o.per&&!periodMatch(r.d))return false;
+ const x=o.ex; // ex = dimensão que o próprio gráfico clicado ignora (para continuar mostrando as outras opções)
+ if(o.per){
+  if(x==='dia'){if(!periodMonth(r.d))return false}else if(!periodMatch(r.d))return false;
+  if(x!=='sem'&&F.sem.size&&!F.sem.has(String(wk(r.d))))return false;
+  if(r.impacto!==undefined){if(x!=='imp'&&F.imp.size&&!F.imp.has(r.impacto))return false;if(x!=='grp'&&F.grp.size&&!F.grp.has(r.grupo))return false}
+  if(r.hht!==undefined){if(x!=='desc'&&F.desc.size&&!F.desc.has(r.desc))return false;if(x!=='wgrp'&&F.wgrp.size&&!F.wgrp.has(r.grupo))return false}
+ }
  if(o.geo){if(F.cor.size&&!F.cor.has(r.corr))return false;if(F.site.size&&!F.site.has(r.site))return false}
  if(o.ativo&&F.ativo.size&&!F.ativo.has(r.ativo))return false;
  if(o.plano&&F.plano.size&&!F.plano.has(r.plano))return false;
@@ -491,17 +507,20 @@ function refresh(keep){const open=keep,old=open&&document.querySelector(`[data-p
 
 /* ---------- gráficos ---------- */
 function readC(){const s=getComputedStyle(document.documentElement);['teal','teal2','amber','navy','blue','green','grey','lgrey','red','ink','muted','line','card','track'].forEach(k=>C[k]=s.getPropertyValue('--'+k).trim());C.pal=[C.teal,C.teal2,C.amber,C.grey,C.navy,C.blue,C.green,C.lgrey,C.red]}
-function ch(h,opt){const id='c'+(++cid);post.push(()=>{const el=document.getElementById(id);if(!el)return;const c=echarts.init(el,null,{renderer:'svg'});
- c.setOption(Object.assign({animation:false,color:C.pal,textStyle:{color:C.muted,fontFamily:'Barlow,system-ui,sans-serif'},tooltip:{backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},confine:true}},opt));charts.push(c)});
- return `<div class="chart" id="${id}" style="height:${h}px"></div>`}
+function ch(h,opt){const clk=opt.click;if(clk){opt=Object.assign({},opt);delete opt.click}const id='c'+(++cid);post.push(()=>{const el=document.getElementById(id);if(!el)return;const c=echarts.init(el,null,{renderer:'svg'});
+ c.setOption(Object.assign({animation:false,color:C.pal,textStyle:{color:C.muted,fontFamily:'Barlow,system-ui,sans-serif'},tooltip:{backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},confine:true}},opt));charts.push(c);
+ if(clk){const pie=opt.series&&opt.series[0]&&opt.series[0].type==='pie';
+  if(pie)c.on('click',p=>{if(p.name&&p.name!=='Outros')clk(p.name)});
+  else c.getZr().on('click',e=>{const pt=[e.offsetX,e.offsetY];if(!c.containPixel('grid',pt))return;const i=Math.round(c.convertFromPixel({gridIndex:0},pt)[0]);if(i>=0)clk(i)})}});
+ return `<div class="chart${clk?' clk':''}" id="${id}" style="height:${h}px"></div>`}
 const ax=(extra={})=>Object.assign({axisLine:{lineStyle:{color:C.line}},axisTick:{show:false},axisLabel:{color:C.muted},splitLine:{lineStyle:{color:C.line,type:'dashed'}}},extra);
 const narrow=()=>window.innerWidth<720;
 function donut(rows,h,opts={}){ // rows [{name,value}]
  const top=rows.slice(0,9),rest=rows.slice(9);if(rest.length)top.push({name:'Outros',value:sum(rest,r=>r.value)});
  const tot=sum(top,r=>r.value);
- return ch(h,{legend:{type:'scroll',orient:narrow()?'horizontal':'vertical',[narrow()?'bottom':'right']:0,top:narrow()?undefined:'middle',textStyle:{color:C.muted,width:narrow()?undefined:150,overflow:'truncate'},icon:'circle',pageTextStyle:{color:C.muted}},
+ return ch(h,{click:opts.click,legend:{type:'scroll',orient:narrow()?'horizontal':'vertical',[narrow()?'bottom':'right']:0,top:narrow()?undefined:'middle',textStyle:{color:C.muted,width:narrow()?undefined:150,overflow:'truncate'},icon:'circle',pageTextStyle:{color:C.muted}},
   tooltip:{trigger:'item',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},confine:true,formatter:p=>`${esc(p.name)}<br><b>${isH(opts.unit)?nh(p.value):nf(p.value)}</b> ${isH(opts.unit)?'':(opts.unit||'')} (${nf(p.percent,1)}%)`},
-  series:[{type:'pie',radius:['48%','74%'],center:narrow()?['50%','42%']:['36%','50%'],itemStyle:{borderColor:C.card,borderWidth:2},label:{show:true,color:C.muted,formatter:p=>p.percent>=2.5?nf(p.percent,1)+'%':''},labelLine:{lineStyle:{color:C.line}},data:top.map(r=>({name:r.name,value:+r.value.toFixed(2)}))}],
+  series:[{type:'pie',radius:['48%','74%'],center:narrow()?['50%','42%']:['36%','50%'],itemStyle:{borderColor:C.card,borderWidth:2},label:{show:true,color:C.muted,formatter:p=>p.percent>=2.5?nf(p.percent,1)+'%':''},labelLine:{lineStyle:{color:C.line}},data:top.map(r=>({name:r.name,value:+r.value.toFixed(2),itemStyle:opts.sel&&opts.sel.size&&!opts.sel.has(r.name)?{opacity:.3}:{}}))}],
   graphic:opts.center?[{type:'text',left:narrow()?'center':'27%',top:narrow()?'33%':'43%',style:{text:opts.center,fill:C.ink,font:'500 26px "Barlow Condensed",sans-serif',textAlign:'center'}}]:[]})}
 function grpSum(rows,key,val){const m={};rows.forEach(r=>{m[key(r)]=(m[key(r)]||0)+val(r)});return Object.entries(m).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)}
 function kpiH(v,l){return `<div class="kpi"><b>${hm(v)}</b><span>${l}${v==null?'':' ('+nf(v)+')'}</span></div>`}
@@ -536,10 +555,10 @@ function pgGeral(){
   {type:'gauge',min:0,max:Math.max(meta,aca,destino,1),startAngle:200,endAngle:-20,radius:'92%',center:['50%','62%'],progress:{show:true,width:22,itemStyle:{color:C.teal}},axisLine:{lineStyle:{width:22,color:[[1,C.track]]}},pointer:{show:false},axisTick:{show:false},splitLine:{show:false},axisLabel:{color:C.muted,distance:-34,formatter:v=>v===0||v>=Math.max(meta,aca,destino,1)-1?nf(v,0):''},detail:{valueAnimation:false,offsetCenter:[0,'8%'],fontSize:30,fontFamily:'Barlow Condensed',color:C.ink,formatter:v=>nf(v)},data:[{value:+aca.toFixed(2)}]},
   {type:'gauge',min:0,max:Math.max(meta,aca,destino,1),startAngle:200,endAngle:-20,radius:'92%',center:['50%','62%'],axisLine:{show:false},axisTick:{show:false},splitLine:{show:false},axisLabel:{show:false},pointer:{show:true,length:'96%',width:4,offsetCenter:[0,0],itemStyle:{color:C.amber}},anchor:{show:false},detail:{show:false},data:[{value:+destino.toFixed(2)}]}]})+`<div class="note">Marcador amarelo: Destino = efetivo médio (${nf(efAvg)}) × ${nf(META_PESSOA,1)} m²/pessoa × ${dias} dias de execução = ${nf(destino)} m².</div>`);
  h+=card('c4','Preparação | Acabamento',`<div class="pct">100%</div><div class="bar2"><div class="r"><span>Preparação</span><div class="b" style="width:100%">${nf(prep)}</div></div><div class="r"><span>Acabamento</span><div class="b" style="width:${Math.max(8,Math.min(100,prep?aca/prep*100:0))}%">${nf(aca)}</div></div></div><div class="pct">${nf(prep?aca/prep*100:null,1)}%</div>`);
- const I=M.imp.filter(r=>pass(r,{per:1,geo:1})),iw=weekly(I,r=>r.h),ws=Object.keys(iw).map(Number).sort((a,b)=>a-b);
- h+=card('c4','Horas de impacto por semana',ch(250,{grid:{left:40,right:10,top:20,bottom:36},xAxis:ax({type:'category',data:ws,name:'Semana',nameLocation:'middle',nameGap:24,splitLine:{show:false}}),yAxis:ax({type:'value'}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},formatter:p=>`Semana ${p[0].name}<br><b>${nh(p[0].value)}</b>`},series:[{type:'bar',data:ws.map(w=>+iw[w].toFixed(2)),itemStyle:{color:C.teal,borderRadius:[3,3,0,0]},barMaxWidth:14}]}));
- const pw=weekly(E.filter(r=>r.etapa==='Jateamento'||r.etapa==='ST2'),r=>r.area),aw=weekly(E.filter(r=>r.etapa==='Acabamento'),r=>r.area),w2=uniq([...Object.keys(pw),...Object.keys(aw)].map(Number)).sort((a,b)=>a-b);
- h+=card('c7','Preparação e Acabamento por semana (m²)',ch(300,{legend:{top:0,right:0,textStyle:{color:C.muted},icon:'roundRect'},grid:{left:44,right:10,top:30,bottom:36},xAxis:ax({type:'category',data:w2,name:'Semana',nameLocation:'middle',nameGap:24,splitLine:{show:false}}),yAxis:ax({type:'value'}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' m²'},series:[{name:'Área Preparação',type:'bar',data:w2.map(w=>+(pw[w]||0).toFixed(2)),itemStyle:{color:C.teal,borderRadius:[3,3,0,0]},barMaxWidth:10},{name:'Área Acabamento',type:'bar',data:w2.map(w=>+(aw[w]||0).toFixed(2)),itemStyle:{color:C.amber,borderRadius:[3,3,0,0]},barMaxWidth:10}]}));
+ const E0=M.exec.filter(r=>pass(r,{per:1,geo:1,ativo:1,plano:1,ex:'sem'})),I=M.imp.filter(r=>pass(r,{per:1,geo:1,ex:'sem'})),iw=weekly(I,r=>r.h),ws=Object.keys(iw).map(Number).sort((a,b)=>a-b);
+ h+=card('c4','Horas de impacto por semana',ch(250,{click:i=>{if(ws[i]!=null)tog(F.sem,String(ws[i]))},grid:{left:40,right:10,top:20,bottom:36},xAxis:ax({type:'category',data:ws,name:'Semana',nameLocation:'middle',nameGap:24,splitLine:{show:false}}),yAxis:ax({type:'value'}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},formatter:p=>`Semana ${p[0].name}<br><b>${nh(p[0].value)}</b>`},series:[{type:'bar',data:ws.map(w=>({value:+iw[w].toFixed(2),itemStyle:{opacity:!F.sem.size||F.sem.has(String(w))?1:.35}})),itemStyle:{color:C.teal,borderRadius:[3,3,0,0]},barMaxWidth:14}]}));
+ const pw=weekly(E0.filter(r=>r.etapa==='Jateamento'||r.etapa==='ST2'),r=>r.area),aw=weekly(E0.filter(r=>r.etapa==='Acabamento'),r=>r.area),w2=uniq([...Object.keys(pw),...Object.keys(aw)].map(Number)).sort((a,b)=>a-b);
+ h+=card('c7','Preparação e Acabamento por semana (m²)',ch(300,{click:i=>{if(w2[i]!=null)tog(F.sem,String(w2[i]))},legend:{top:0,right:0,textStyle:{color:C.muted},icon:'roundRect'},grid:{left:44,right:10,top:30,bottom:36},xAxis:ax({type:'category',data:w2,name:'Semana',nameLocation:'middle',nameGap:24,splitLine:{show:false}}),yAxis:ax({type:'value'}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nf(v)+' m²'},series:[{name:'Área Preparação',type:'bar',data:w2.map(w=>({value:+(pw[w]||0).toFixed(2),itemStyle:{opacity:!F.sem.size||F.sem.has(String(w))?1:.35}})),itemStyle:{color:C.teal,borderRadius:[3,3,0,0]},barMaxWidth:10},{name:'Área Acabamento',type:'bar',data:w2.map(w=>({value:+(aw[w]||0).toFixed(2),itemStyle:{opacity:!F.sem.size||F.sem.has(String(w))?1:.35}})),itemStyle:{color:C.amber,borderRadius:[3,3,0,0]},barMaxWidth:10}]}));
  const byD={};E.forEach(r=>{const x=byD[r.d]=byD[r.d]||{p:0,a:0,rows:[]};if(r.etapa==='Jateamento'||r.etapa==='ST2')x.p+=r.area;if(r.etapa==='Acabamento')x.a+=r.area;x.rows.push(r)});
  let tb='';Object.keys(byD).sort().reverse().forEach(d=>{const x=byD[d];tb+=`<tr class="grp" data-g="${d}"><td>${fd(d)}</td><td class="n">${nf(x.p)}</td><td class="n">${nf(x.a)}</td><td></td></tr>`;
   x.rows.forEach(r=>tb+=`<tr class="sub" hidden data-c="${d}"><td>${esc(r.ativo||'(Sem nota)')} · ${esc(r.etapa)}</td><td class="n">${r.etapa==='Acabamento'?'':nf(r.area)}</td><td class="n">${r.etapa==='Acabamento'?nf(r.area):''}</td><td>${esc(r.obs)}</td></tr>`)});
@@ -571,22 +590,24 @@ function pgDia(){
 /* ---------- Wrench Time ---------- */
 function pgWrench(){
  const W=M.wt.filter(r=>pass(r,{per:1,geo:1,ativo:1,plano:1}));if(!W.length)return card('c12','',empty);
- const byDesc=grpSum(W.filter(r=>r.desc!=null),r=>r.desc,r=>r.hht),byG=grpSum(W.filter(r=>r.grupo!=null),r=>r.grupo,r=>r.hht);
+ const WO={per:1,geo:1,ativo:1,plano:1},Wd=M.wt.filter(r=>pass(r,Object.assign({ex:'desc'},WO))),Wg=M.wt.filter(r=>pass(r,Object.assign({ex:'wgrp'},WO))),Wdia=M.wt.filter(r=>pass(r,Object.assign({ex:'dia'},WO)));
+ const byDesc=grpSum(Wd.filter(r=>r.desc!=null),r=>r.desc,r=>r.hht),byG=grpSum(Wg.filter(r=>r.grupo!=null),r=>r.grupo,r=>r.hht),byDescF=grpSum(W.filter(r=>r.desc!=null),r=>r.desc,r=>r.hht);
  // Tempo Médio por Colaborador = HHT do dia ÷ maior efetivo lançado no dia
- const efMax={};M.ef.filter(r=>pass(r,{per:1,geo:1})).forEach(r=>{efMax[r.d]=Math.max(efMax[r.d]??-Infinity,r.n)});
- const dm={};W.forEach(r=>{dm[r.d]=(dm[r.d]||0)+r.hht});
+ const efMax={};M.ef.filter(r=>pass(r,{per:1,geo:1,ex:'dia'})).forEach(r=>{efMax[r.d]=Math.max(efMax[r.d]??-Infinity,r.n)});
+ const dm={};Wdia.forEach(r=>{dm[r.d]=(dm[r.d]||0)+r.hht});
  const dk=Object.keys(dm).sort().filter(d=>efMax[d]>0);
- let h=card('c6','Duração total em horas por descrição (HHT)',byDesc.length?donut(byDesc,320,{unit:'HHT'}):empty);
- h+=card('c6','Tempo médio em horas por dia',dk.length?ch(320,{grid:{left:44,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value',name:'Horas',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nh(v)},series:[{type:'line',symbolSize:6,data:dk.map(d=>+(dm[d]/efMax[d]).toFixed(4)),itemStyle:{color:C.teal},lineStyle:{color:C.teal}}]}):empty);
- h+=card('c5','Duração total em horas por grupo (HHT)',byG.length?donut(byG,300,{unit:'HHT'}):empty);
- const tot=sum(byDesc,r=>r.value);
- h+=card('c7','Detalhe por descrição',`<div class="tw imp-table"><table><thead><tr><th>Descrição</th><th class="n">HHT</th></tr></thead><tbody>${byDesc.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${nh(r.value)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${nh(tot)}</td></tr></tbody></table></div>`);
+ let h=card('c6','Duração total em horas por descrição (HHT)',byDesc.length?donut(byDesc,320,{unit:'HHT',sel:F.desc,click:n=>tog(F.desc,n)}):empty);
+ h+=card('c6','Tempo médio em horas por dia',dk.length?ch(320,{click:i=>{const d=dk[i];if(d)tog(F.per,'D:'+d)},grid:{left:44,right:14,top:20,bottom:50},dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:6,borderColor:C.line,textStyle:{color:C.muted}}],xAxis:ax({type:'category',data:dk.map(fd),splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),yAxis:ax({type:'value',name:'Horas',nameTextStyle:{color:C.muted}}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},valueFormatter:v=>nh(v)},series:[{type:'line',symbolSize:6,data:dk.map(d=>({value:+(dm[d]/efMax[d]).toFixed(4),symbolSize:F.per.has('D:'+d)?12:6,itemStyle:{color:F.per.has('D:'+d)?C.amber:C.teal}})),itemStyle:{color:C.teal},lineStyle:{color:C.teal}}]}):empty);
+ h+=card('c5','Duração total em horas por grupo (HHT)',byG.length?donut(byG,300,{unit:'HHT',sel:F.wgrp,click:n=>tog(F.wgrp,n)}):empty);
+ const tot=sum(byDescF,r=>r.value);
+ h+=card('c7','Detalhe por descrição',`<div class="tw imp-table"><table><thead><tr><th>Descrição</th><th class="n">HHT</th></tr></thead><tbody>${byDescF.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${nh(r.value)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${nh(tot)}</td></tr></tbody></table></div>`);
  return h}
 
 /* ---------- Impactos ---------- */
 
 
 function pgImp(){
+ const Ii=M.imp.filter(r=>pass(r,{per:1,geo:1,ex:'imp'})),Ig0=M.imp.filter(r=>pass(r,{per:1,geo:1,ex:'grp'})),Id=M.imp.filter(r=>pass(r,{per:1,geo:1,ex:'dia'}));
 
  const I=M.imp.filter(r=>pass(r,{per:1,geo:1})),
        E=M.exec.filter(r=>pass(r,{per:1,geo:1,ativo:1,plano:1}));
@@ -594,8 +615,8 @@ function pgImp(){
  if(!I.length&&!E.length)return card('c12','',empty);
 
  const tot=sum(I,r=>r.h),
-       bi=grpSum(I,r=>r.impacto,r=>r.h),
-       Ig=I.filter(r=>r.grupo!=='(Em branco)'),
+       bi=grpSum(Ii,r=>r.impacto,r=>r.h),
+       Ig=Ig0.filter(r=>r.grupo!=='(Em branco)'),
        bl=v=>v==='(Em branco)'?'':v;
 
  let h='';
@@ -605,7 +626,7 @@ function pgImp(){
  h+=card('c6','Horas perdidas por impacto',
 
  bi.length
- ? ch(245,{
+ ? ch(245,{click:i=>{if(bi[i])tog(F.imp,bi[i].name)},
 
    grid:{
      left:45,
@@ -651,7 +672,7 @@ function pgImp(){
 
    series:[{
      type:'bar',
-     data:bi.map(r=>+r.value.toFixed(2)),
+     data:bi.map(r=>({value:+r.value.toFixed(2),itemStyle:{opacity:!F.imp.size||F.imp.has(r.name)?1:.35}})),
      barMaxWidth:25,
      itemStyle:{
        color:C.teal,
@@ -667,8 +688,7 @@ function pgImp(){
 
  const dm={};
 
- I.forEach(r=>{
-   dm[r.d]=(dm[r.d]||0)+r.h;
+ Id.forEach(r=>{dm[r.d]=(dm[r.d]||0)+r.h;
  });
 
  const dk=Object.keys(dm).sort();
@@ -676,7 +696,7 @@ function pgImp(){
  h+=card('c6','Horas de impacto por dia',
 
  dk.length
- ? ch(245,{
+ ? ch(245,{click:i=>{const d=dk[i];if(d)tog(F.per,'D:'+d)},
 
    grid:{
      left:45,
@@ -729,7 +749,7 @@ function pgImp(){
      type:'line',
      symbolSize:5,
      smooth:false,
-     data:dk.map(d=>+dm[d].toFixed(2)),
+     data:dk.map(d=>({value:+dm[d].toFixed(2),symbolSize:F.per.has('D:'+d)?12:5,itemStyle:{color:F.per.has('D:'+d)?C.amber:C.teal}})),
      itemStyle:{color:C.teal},
      lineStyle:{
        color:C.teal,
@@ -752,7 +772,7 @@ function pgImp(){
        ${donut(
          grpSum(Ig,r=>r.grupo,r=>r.h),
          260,
-         {unit:'h'}
+         {unit:'h',sel:F.grp,click:n=>tog(F.grp,n)}
        )}
      </div>
 
@@ -876,10 +896,19 @@ function fitTables(){
   while(w.scrollHeight>w.clientHeight+1&&(fs>9||tp>1)){if(fs>9)fs-=.5;if(tp>1)tp-=.5;set()}
  })
 }
+const CHIPS=[['sem','Semana '],['imp','Impacto: '],['grp','Grupo de impacto: '],['desc','Atividade: '],['wgrp','Grupo: '],['per','']];
+function chipTxt(k,v){if(k==='per')return v[0]==='M'?'Mês '+v.slice(7)+'/'+v.slice(2,6):'Dia '+fd(v.slice(2));return v}
+function renderChips(){
+ const el=$('#chips');let h='';
+ if(page.f)CHIPS.forEach(([k,l])=>F[k].forEach(v=>{h+=`<button type="button" class="chip" data-ck="${k}" data-cv="${esc(v)}" title="Remover este filtro">${esc(l+chipTxt(k,v))}</button>`}));
+ el.hidden=!h;el.innerHTML=h?'<span class="lbl">Filtros por clique:</span>'+h+'<button type="button" class="clr2" data-call="1">Limpar</button>':''}
+$('#chips').addEventListener('click',e=>{
+ if(e.target.closest('[data-call]')){CHIPS.forEach(([k])=>F[k].clear());draw();return}
+ const b=e.target.closest('[data-ck]');if(!b)return;F[b.dataset.ck].delete(b.dataset.cv);draw()});
 function draw(){
  charts.forEach(c=>c.dispose());charts=[];post=[];cid=0;readC();
  $('#tabs').innerHTML=PAGES.map(p=>`<a href="#${p.id}" class="${p===page?'on':''}">${p.name}</a>`).join('');
- renderFilters();$('#main').dataset.p=page.id;$('#main').innerHTML=page.fn();post.forEach(f=>f());fitTables();
+ renderFilters();renderChips();$('#main').dataset.p=page.id;$('#main').innerHTML=page.fn();post.forEach(f=>f());fitTables();
  $('#foot').textContent=`Dados até ${fd(M.last)} · `+`Developer by Pedro Santos`;
 }
 $('#main').addEventListener('click',e=>{const g=e.target.closest('tr.grp');if(!g)return;g.classList.toggle('open');const k=g.dataset.g;[...g.parentNode.querySelectorAll('tr.sub')].filter(r=>r.dataset.c===k).forEach(r=>r.hidden=!r.hidden)});
