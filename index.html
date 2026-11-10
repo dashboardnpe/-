@@ -43,6 +43,14 @@ header{background:var(--head);color:var(--head-ink)}
 .dd .pn[hidden]{display:none}
 .pn label{display:flex;gap:8px;align-items:center;padding:4px 6px;white-space:nowrap;cursor:pointer;border-radius:3px}
 .pn label:hover{background:var(--track)}
+.pn .mh{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:3px}
+.pn .mh:hover{background:var(--track)}
+.pn .mt{flex:1;display:flex;align-items:center;gap:6px;background:none;border:0;color:var(--ink);font:inherit;font-weight:600;text-align:left;cursor:pointer;padding:0;white-space:nowrap}
+.pn .mt .car{display:inline-block;width:10px;font-size:9px;color:var(--muted);transition:transform .15s}
+.pn .mt[aria-expanded="true"] .car{transform:rotate(90deg)}
+.pn .mt .cnt{margin-left:auto;padding-left:10px;font-size:11px;font-weight:500;color:var(--teal)}
+.pn .md{padding-left:22px}
+.pn .md[hidden]{display:none}
 .pn .gh{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 6px 2px}
 .pn .clr{width:100%;border:0;background:none;color:var(--teal);font:inherit;text-align:left;padding:4px 6px;cursor:pointer;font-weight:600}
 .btn{background:transparent;color:var(--head-ink);border:1px solid rgba(255,255,255,.55);border-radius:4px;padding:6px 12px;font:inherit;cursor:pointer;font-weight:500}
@@ -440,10 +448,17 @@ const PAGES=[
  {id:'impactos',name:'Impactos',f:{per:1,geo:1,ativo:1,plano:1},fn:pgImp},
  {id:'controle-de-tintas',name:'Controle de Tintas',f:{per:1,geo:1,ativo:1,plano:1},fn:pgTintas},
  {id:'carteira',name:'Carteira',f:{per:1,geo:1,ativo:1,plano:1},fn:pgCart}];
+const OPENM=new Set(); // meses expandidos no filtro de período
 function ddHTML(id,label,items,on){
  const sel=items.filter(i=>i.set.has(i.v)),txt=!sel.length?'Todos':sel.length===1?sel[0].label:sel.length+' selecionados';
  let h=`<div class="dd${on?'':' off'}" ${on?'':'title="Este filtro não se aplica a esta página"'}><label>${label}</label><button type="button" data-dd="${id}" aria-haspopup="true">${esc(txt)}</button><div class="pn" hidden data-pn="${id}"><button class="clr" type="button" data-clr="${id}">Limpar seleção</button>`;
+ if(id==='per'){ // Período: um item por mês (recolhido); os dias só aparecem ao clicar no mês
+  const gs=[];items.forEach((i,k)=>{let x=gs[gs.length-1];if(!x||x.g!==i.g){x={g:i.g,head:null,days:[]};gs.push(x)}if(i.v.startsWith('M:'))x.head={i,k};else x.days.push({i,k})});
+  gs.forEach(x=>{const open=OPENM.has(x.g),n=x.days.filter(d=>d.i.set.has(d.i.v)).length;
+   h+=`<div class="mh">${x.head?`<input type="checkbox" data-id="${id}" data-k="${x.head.k}" title="Selecionar o mês inteiro" aria-label="Mês inteiro ${esc(x.g)}" ${x.head.i.set.has(x.head.i.v)?'checked':''}>`:''}<button type="button" class="mt" data-mtog="${esc(x.g)}" aria-expanded="${open}"><span class="car">▶</span>${esc(x.g)}${n?`<span class="cnt">${n} dia${n>1?'s':''}</span>`:''}</button></div><div class="md"${open?'':' hidden'}>${x.days.map(d=>`<label><input type="checkbox" data-id="${id}" data-k="${d.k}" ${d.i.set.has(d.i.v)?'checked':''}>${esc(d.i.label)}</label>`).join('')}</div>`})
+ }else{
  let g=null;items.forEach((i,k)=>{if(i.g&&i.g!==g){g=i.g;h+=`<div class="gh">${esc(g)}</div>`}h+=`<label><input type="checkbox" data-id="${id}" data-k="${k}" ${i.set.has(i.v)?'checked':''}>${esc(i.label)}</label>`});
+ }
  return h+'</div></div>'}
 let DD={};
 function renderFilters(){
@@ -459,13 +474,15 @@ function renderFilters(){
  DD.plano=['TRUE','FALSE','(Em branco)'].map(a=>({v:a,label:a,set:F.plano}));
  $('#filters').innerHTML=page.f?ddHTML('per','Período Medição',DD.per,p.per)+ddHTML('geo','Corredor, Site',DD.geo,p.geo)+ddHTML('ativo','Ativo',DD.ativo,p.ativo)+ddHTML('plano','Plano Diretor',DD.plano,p.plano)+ddHTML('prio','Prioridade',DD.prio,p.plano):''}
 $('#filters').addEventListener('click',e=>{
+ const mt=e.target.closest('[data-mtog]');
+ if(mt){const k=mt.dataset.mtog,md=mt.parentNode.nextElementSibling;OPENM.has(k)?OPENM.delete(k):OPENM.add(k);md.hidden=!OPENM.has(k);mt.setAttribute('aria-expanded',String(OPENM.has(k)));return}
  const b=e.target.closest('[data-dd]');
  if(b){const pn=b.nextElementSibling,was=pn.hidden;document.querySelectorAll('.pn').forEach(x=>x.hidden=true);pn.hidden=!was;return}
  const c=e.target.closest('[data-clr]');
  if(c){const id=c.dataset.clr;DD[id].forEach(i=>i.set.clear());refresh(id);return}});
 $('#filters').addEventListener('change',e=>{const t=e.target;if(!t.dataset.id)return;const i=DD[t.dataset.id][+t.dataset.k];t.checked?i.set.add(i.v):i.set.delete(i.v);refresh(t.dataset.id)});
 document.addEventListener('click',e=>{if(!e.target.closest('.dd'))document.querySelectorAll('.pn').forEach(x=>x.hidden=true)});
-function refresh(keep){const open=keep;draw();if(open){const pn=document.querySelector(`[data-pn="${open}"]`);if(pn)pn.hidden=false}}
+function refresh(keep){const open=keep,old=open&&document.querySelector(`[data-pn="${open}"]`),st=old?old.scrollTop:0;draw();if(open){const pn=document.querySelector(`[data-pn="${open}"]`);if(pn){pn.hidden=false;pn.scrollTop=st}}}
 
 /* ---------- gráficos ---------- */
 function readC(){const s=getComputedStyle(document.documentElement);['teal','teal2','amber','navy','blue','green','grey','lgrey','red','ink','muted','line','card','track'].forEach(k=>C[k]=s.getPropertyValue('--'+k).trim());C.pal=[C.teal,C.teal2,C.amber,C.grey,C.navy,C.blue,C.green,C.lgrey,C.red]}
