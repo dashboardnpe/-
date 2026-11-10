@@ -1,6 +1,6 @@
 {
-  "name": "Painel NPE Vale",
-  "short_name": "Painel NPE",
+  "name": "Dashboard NPE | Vale",
+  "short_name": "Dashboard NPE",
   "description": "Painel de acompanhamento NPE Vale: execução diária, impactos, efetivo, wrench time e tintas.",
   "lang": "pt-BR",
   "id": "./",
