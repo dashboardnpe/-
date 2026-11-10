@@ -1,6 +1,6 @@
 // Service worker do Dashboard NPE Vale
 // Ao alterar qualquer arquivo do app, aumente a versão abaixo para forçar a atualização.
-const VERSAO = 'dashboard-npe-v10';
+const VERSAO = 'dashboard-npe-v17';
 const CACHE_APP = VERSAO + '-app';
 const CACHE_EXT = VERSAO + '-ext';
 
