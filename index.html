@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dashboard NPE | Vale</title>
+<script>try{var t=localStorage.getItem('painel-npe-tema');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="theme-color" content="#00776b">
 <meta name="description" content="Painel de acompanhamento NPE Vale">
 <link rel="manifest" href="manifest.webmanifest">
@@ -918,9 +919,12 @@ function setTheme(mode){
  bgToggle.title=mode==='dark'?'Ativar tema claro':'Ativar tema escuro';
 
 }
-setTheme('light');
+let temaSalvo=null;try{temaSalvo=localStorage.getItem('painel-npe-tema')}catch(e){}
+setTheme(temaSalvo==='dark'?'dark':'light');
 bgToggle.addEventListener('click',()=>{
- setTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
+ const novo=document.documentElement.dataset.theme==='light'?'dark':'light';
+ setTheme(novo);
+ try{localStorage.setItem('painel-npe-tema',novo)}catch(e){} // lembra a escolha do usuário
 });
 
 // Menu da seta: abre/fecha o painel com Atualizar planilha e Exportar dados.json
