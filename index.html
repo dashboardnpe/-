@@ -3,7 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Painel NPE Vale</title>
+<title>Dashboard NPE | Vale</title>
+<meta name="theme-color" content="#00776b">
+<meta name="description" content="Painel de acompanhamento NPE Vale">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Painel NPE">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&display=swap">
 <style>
 /* Layout: faixa verde com filtros, abas de página, grade de cartões brancos sobre fundo cinza claro (mesma lógica do relatório Power BI) */
@@ -41,6 +51,17 @@ nav.tabs{display:flex;overflow-x:auto;background:var(--card);border-bottom:1px s
 nav.tabs a{padding:11px 18px;color:var(--muted);text-decoration:none;white-space:nowrap;font-weight:500;border-bottom:3px solid transparent}
 nav.tabs a:hover{color:var(--ink)}
 nav.tabs a.on{color:var(--teal);border-bottom-color:var(--teal);font-weight:600}
+/* Menu de ações (seta para cima) no canto direito da barra de páginas */
+.tabbar{position:relative;display:flex;align-items:stretch;background:var(--card);border-bottom:1px solid var(--line)}
+.tabbar nav.tabs{flex:1 1 auto;min-width:0;background:transparent;border-bottom:0}
+.menu{flex:0 0 auto;display:flex;align-items:center;padding-inline:8px max(16px,env(safe-area-inset-right,0px))}
+.menu-toggle{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:4px;cursor:pointer}
+.menu-toggle:hover,.menu-toggle[aria-expanded="true"]{color:var(--ink);background:var(--track)}
+.menu-toggle svg{width:18px;height:18px;display:block}
+.menu-panel{position:absolute;z-index:40;top:100%;right:max(16px,env(safe-area-inset-right,0px));margin-top:2px;min-width:200px;display:flex;flex-direction:column;gap:6px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.menu-panel[hidden]{display:none}
+.menu-panel .btn{width:100%;text-align:left;color:var(--ink);border-color:var(--line)}
+.menu-panel .btn:hover{background:var(--track)}
 main{padding-block:14px 24px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
 .card{background:var(--card);border-radius:8px;box-shadow:var(--shadow);padding:14px 16px;min-width:0}
 .card h3{margin:0 0 10px;font-family:var(--disp);font-size:15px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -276,6 +297,45 @@ footer button{background:none;border:0;color:var(--teal);cursor:pointer;font:inh
 #toast[hidden]{display:none}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
+/* ===== Modo "tela cheia": em telas largas cada página cabe na janela, sem rolar a página ===== */
+@media (min-width:981px) and (min-height:600px){
+ html,body{height:100%}
+ body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+ header,.tabbar,footer{flex:0 0 auto}
+ .top{padding-block:8px}
+ .brand img{height:34px}
+ main{flex:1 1 auto;min-height:0;padding-block:10px 6px;gap:10px;grid-auto-rows:minmax(0,auto)}
+ footer{padding-bottom:6px}
+ main[data-p="visao-geral"]{grid-template-rows:auto minmax(0,1fr) minmax(0,1.3fr)}
+ main[data-p="report-diario"]{grid-template-rows:auto minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,.9fr)}
+ main[data-p="wrench-time"]{grid-template-rows:repeat(2,minmax(0,1fr))}
+ main[data-p="impactos"]{grid-template-rows:repeat(2,minmax(0,1fr))}
+ main[data-p="controle-de-tintas"]{grid-template-rows:auto minmax(0,.75fr) minmax(0,1.25fr)}
+ main[data-p="carteira"]{grid-template-rows:minmax(0,1fr)}
+ .card{display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:10px 14px}
+ .card h3{flex:0 0 auto;margin-bottom:6px;font-size:14px}
+ .card>.chart{height:auto!important;flex:1 1 0;min-height:0}
+ .card>.tw{flex:1 1 0;min-height:0;max-height:none!important}
+ .tw td{padding:var(--tp,4px) 10px;font-size:var(--fs,12px)}
+ .tw th{padding:calc(var(--tp,4px) + 1px) 10px;font-size:var(--fs,12px)}
+ .kpi b{font-size:28px}
+ .kpis{gap:8px 20px}
+ .card>.impacto-layout{flex:1 1 0;min-height:0;align-items:stretch}
+ .impacto-rosca{display:flex;flex-direction:column;min-height:0}
+ .impacto-rosca>.chart{height:auto!important;flex:1 1 0;min-height:0}
+ .impacto-popup{align-self:center}
+ .bar2{flex:1 1 0;min-height:0;justify-content:center;gap:8px;padding:4px 0}
+ .bar2 .b{height:30px}
+ .sub4{min-height:0;grid-template-rows:minmax(0,1fr) minmax(0,1fr);gap:10px}
+ .prog{display:flex;flex-direction:column;justify-content:center;min-height:0;padding:8px 12px}
+ .prog .lbl{margin-bottom:4px;font-size:12px}
+ .prog .big{font-size:24px}
+ .prog .trk{margin:5px 0 3px}
+ .pct{margin:0}
+ .card>.kpis+.kpis{margin-top:4px!important}
+ .card>.kpis .kpi span{font-size:11px}
+}
+
 /* O tema claro/escuro é controlado pelo botão do cabeçalho */
 :root[data-theme="light"]{color-scheme:light}
 body{background:var(--bg)}
@@ -285,13 +345,23 @@ body{background:var(--bg)}
 <header><div class="wrap top">
 <div class="brand-actions">
  <div class="brand"><img src="imagens/npelogob.png" alt="NPE"><img src="imagens/valelogob.png" alt="Vale"></div>
- <div class="header-actions"><button class="btn" id="up">Atualizar planilha</button><button class="btn" id="exp" hidden>Exportar dados.json</button></div>
 </div>
 <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
 <div class="filters" id="filters"></div>
 <button class="btn theme-toggle" id="bgToggle" type="button" aria-label="Alternar tema" title="Alternar tema">☀</button>
 </div></header>
+<div class="tabbar">
 <nav class="tabs wrap" id="tabs"></nav>
+<div class="menu">
+ <button class="menu-toggle" id="menuBtn" type="button" aria-label="Atualizar e exportar dados" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanel" title="Atualizar / exportar">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 15l7-7 7 7"/></svg>
+ </button>
+ <div class="menu-panel" id="menuPanel" hidden>
+  <button class="btn" id="up" type="button">Atualizar planilha</button>
+  <button class="btn" id="exp" type="button" hidden>Exportar dados.json</button>
+ </div>
+</div>
+</div>
 <main class="wrap" id="main"></main>
 <footer><span id="foot"></span><span><button id="reset" hidden>Voltar aos dados publicados</button></span></footer>
 <div id="toast" hidden></div>
@@ -772,17 +842,29 @@ function pgCart(){
  return card('c12','Carteira',`<div class="tw tall" style="max-height:640px"><table><thead><tr>${cols.map(c=>`<th class="${c[2]==='n'?'n':''}">${c[0]}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>cell(r,c)).join('')}</tr>`).join('')}<tr class="tot"><td>Total</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="n">${ts('prev')}</td><td class="n">${ts('del')}</td><td class="n">${ts('real')}</td><td></td></tr></tbody></table></div>`)}
 
 /* ---------- app ---------- */
+/* Em telas largas, reduz fonte/espaçamento das tabelas até caberem no cartão (sem rolagem); se ainda assim não couber, a rolagem fica só dentro do cartão */
+const FIT_Q='(min-width:981px) and (min-height:600px)';
+function fitTables(){
+ if(!matchMedia(FIT_Q).matches)return;
+ document.querySelectorAll('#main .tw').forEach(w=>{
+  let fs=12,tp=4;
+  const set=()=>{w.style.setProperty('--fs',fs+'px');w.style.setProperty('--tp',tp+'px')};
+  set();
+  while(w.scrollHeight>w.clientHeight+1&&(fs>9||tp>1)){if(fs>9)fs-=.5;if(tp>1)tp-=.5;set()}
+ })
+}
 function draw(){
  charts.forEach(c=>c.dispose());charts=[];post=[];cid=0;readC();
  $('#tabs').innerHTML=PAGES.map(p=>`<a href="#${p.id}" class="${p===page?'on':''}">${p.name}</a>`).join('');
- renderFilters();$('#main').innerHTML=page.fn();post.forEach(f=>f());
- $('#foot').textContent=`Dados até ${fd(M.last)} · `+(SRC==='preview'?'Pré-visualização local, ainda não publicada':'Fonte: '+SRC);
+ renderFilters();$('#main').dataset.p=page.id;$('#main').innerHTML=page.fn();post.forEach(f=>f());fitTables();
+ $('#foot').textContent=`Dados até ${fd(M.last)} · `+`Developer by Pedro Santos`;
 }
 $('#main').addEventListener('click',e=>{const g=e.target.closest('tr.grp');if(!g)return;g.classList.toggle('open');const k=g.dataset.g;[...g.parentNode.querySelectorAll('tr.sub')].filter(r=>r.dataset.c===k).forEach(r=>r.hidden=!r.hidden)});
 $('#main').addEventListener('change',e=>{if(e.target.id==='dsel'){DAY=e.target.value;draw()}});
 function route(){const id=location.hash.slice(1);page=PAGES.find(p=>p.id===id)||PAGES[0];draw()}
 addEventListener('hashchange',route);
-addEventListener('resize',()=>charts.forEach(c=>c.resize()));
+addEventListener('resize',()=>{charts.forEach(c=>c.resize());fitTables()});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{charts.forEach(c=>c.resize());fitTables()});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>draw());
 new MutationObserver(()=>draw()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,5000)}
@@ -819,6 +901,14 @@ bgToggle.addEventListener('click',()=>{
  setTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
 });
 
+// Menu da seta: abre/fecha o painel com Atualizar planilha e Exportar dados.json
+const menuBtn=$('#menuBtn'),menuPanel=$('#menuPanel');
+function setMenu(o){menuPanel.hidden=!o;menuBtn.setAttribute('aria-expanded',String(o))}
+menuBtn.addEventListener('click',e=>{e.stopPropagation();setMenu(menuPanel.hidden)});
+menuPanel.addEventListener('click',()=>setMenu(false));
+document.addEventListener('click',e=>{if(!menuPanel.hidden&&!menuPanel.contains(e.target))setMenu(false)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setMenu(false)});
+
 async function init(){
  let S=null,src='';
  try{const r=await fetch('dados.json',{cache:'no-cache'});if(r.ok){S=await r.json();src='dados.json'}}catch(_){}
@@ -827,6 +917,10 @@ async function init(){
  load(S,src)}
 $('#reset').onclick=init;
 init();
+// PWA: registra o service worker (funciona em HTTPS ou localhost)
+if('serviceWorker' in navigator){
+ addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW não registrado:',err)));
+}
 </script>
 
 </body>
