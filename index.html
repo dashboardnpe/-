@@ -489,7 +489,7 @@ function renderFilters(){
   {g:m.slice(5)+'/'+m.slice(0,4),v:'M:'+m,label:'Mês inteiro',set:F.per},
   ...dates.filter(d=>mm(d)===m).map(d=>({g:m.slice(5)+'/'+m.slice(0,4),v:'D:'+d,label:fd(d),set:F.per}))
  ]);
- DD.geo=[...M.corrs.map(c=>({g:'Corredor',v:c,label:c,set:F.cor})),...M.siteList.map(s=>({g:'Site',v:s,label:s,set:F.site}))];
+ DD.geo=[...M.corrs.map(c=>({g:'Corredor',v:c,label:c,set:F.cor}))];
  DD.ativo=M.ativos.map(a=>({v:a,label:a,set:F.ativo}));
  DD.prio=M.prios.map(a=>({v:a,label:a,set:F.prio}));
  DD.plano=['TRUE','FALSE','(Em branco)'].map(a=>({v:a,label:a,set:F.plano}));
