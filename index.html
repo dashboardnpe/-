@@ -32,9 +32,12 @@ header{background:var(--head);color:var(--head-ink)}
 .brand{display:flex;align-items:center;gap:14px;line-height:1}
 .brand img{display:block;height:38px;width:auto;max-width:180px;object-fit:contain}
 .header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.filters{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
+.fgroup{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto;align-items:flex-start}
+.filters{display:flex;gap:10px;flex-wrap:wrap}
+.anosel label{display:block;font-size:11px;font-weight:600;margin-bottom:2px;letter-spacing:.02em}
+.anosel select{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:5px 8px;font:inherit;min-width:92px;cursor:pointer}
 .theme-toggle{width:42px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;padding:0;flex:0 0 42px}
-@media(max-width:760px){.filters{margin-left:0;order:3;width:100%}.theme-toggle{margin-left:auto}}
+@media(max-width:760px){.fgroup{margin-left:0;order:3;width:100%}.theme-toggle{margin-left:auto}}
 .dd{position:relative;min-width:150px}
 .dd.off{opacity:.45}
 .dd>label{display:block;font-size:11px;font-weight:600;margin-bottom:2px;letter-spacing:.02em}
@@ -316,7 +319,7 @@ footer button{background:none;border:0;color:var(--teal);cursor:pointer;font:inh
  main{flex:1 1 auto;min-height:0;padding-block:10px 6px;gap:10px;grid-auto-rows:minmax(0,auto)}
  footer{padding-bottom:6px}
  main[data-p="visao-geral"]{grid-template-rows:auto minmax(0,1fr) minmax(0,1.3fr)}
- main[data-p="report-diario"]{grid-template-rows:auto minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,.9fr)}
+ main[data-p="report-diario"]{grid-template-rows:auto minmax(0,1fr) minmax(0,2.2fr)}
  main[data-p="wrench-time"]{grid-template-rows:repeat(2,minmax(0,1fr))}
  main[data-p="impactos"]{grid-template-rows:repeat(2,minmax(0,1fr))}
  main[data-p="controle-de-tintas"]{grid-template-rows:auto minmax(0,.75fr) minmax(0,1.25fr)}
@@ -355,6 +358,18 @@ footer button{background:none;border:0;color:var(--teal);cursor:pointer;font:inh
 /* O tema claro/escuro é controlado pelo botão do cabeçalho */
 :root[data-theme="light"]{color-scheme:light}
 body{background:var(--bg)}
+/* Curva S (ativos prioritários) no Report Diário */
+.cs-ctl{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px;flex:0 0 auto}
+.cs-ctl>label{display:flex;flex-direction:column;font-size:11px;font-weight:600;color:var(--muted);gap:2px}
+.cs-ctl select,.cs-ctl input{padding:4px 6px;font-size:12px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:4px;font-family:inherit}
+.cs-ctl .dd{min-width:170px}
+.cs-ctl .dd>label{color:var(--muted)}
+.cs-ctl .dd>button{font-size:12px;padding:4px 8px}
+.cs-ctl .pn{max-height:260px}
+.cs-ctl .pn label.fds{color:var(--muted)}
+.cs-res{display:flex;gap:4px 18px;flex-wrap:wrap;font-size:12px;color:var(--muted);flex:0 0 auto;margin-top:4px}
+.cs-res b{color:var(--ink);font-variant-numeric:tabular-nums}
+.cs-res b.neg{color:var(--red)}
 </style>
 </head>
 <body>
@@ -363,7 +378,7 @@ body{background:var(--bg)}
  <div class="brand"><img src="imagens/npelogob.png" alt="NPE"><img src="imagens/valelogob.png" alt="Vale"></div>
 </div>
 <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
-<div class="filters" id="filters"></div>
+<div class="fgroup"><div class="anosel" id="anoBox"></div><div class="filters" id="filters"></div></div>
 <button class="btn theme-toggle" id="bgToggle" type="button" aria-label="Alternar tema" title="Alternar tema">☀</button>
 </div></header>
 <div class="tabbar">
@@ -375,6 +390,8 @@ body{background:var(--bg)}
  <div class="menu-panel" id="menuPanel" hidden>
   <button class="btn" id="up" type="button">Atualizar planilha</button>
   <button class="btn" id="exp" type="button" hidden>Exportar dados.json</button>
+  <button class="btn" id="upPri" type="button">Atualizar ativos prioritários</button>
+  <button class="btn" id="expPri" type="button" hidden>Exportar ativos_prioritarios.json</button>
  </div>
 </div>
 </div>
@@ -387,7 +404,8 @@ body{background:var(--bg)}
 <script>
 const EMBED=/*DATA*/null;
 const WRAP_MEIA_NOITE=true; // soma 24h quando a hora fim é menor que a hora início (ex.: 23h → 01h = 2h, nunca negativo)
-const META_MES_FIM='2026-11'; // última medição que compõe a Meta Acumulada (fixa). Para mudar o fechamento da meta, altere só aqui.
+const META_FIM_ANO={'2026':'2026-11'}; // Meta Acumulada FIXA por ano: soma as medições até o mês indicado. Ano sem entrada aqui segue a regra por mês (soma até o mês da última execução). Para mudar o fechamento de 2026, altere só aqui.
+const TINTAS_ACUMULA_ANOS=false; // false: Controle de Tintas também zera na virada do ano; true: entradas e saídas de tintas seguem somando entre os anos
 const META_PESSOA=5.2,EFETIVO_HIST=9; // medidas [Meta m² Pessoa] e [Efetivo Histograma] do Power BI
 function hDia(d){const w=new Date(d+'T00:00:00Z').getUTCDay();return w>=1&&w<=4?9:w===5?8:0} // RPT_HHT Disponível: seg-qui 9h, sex 8h, fim de semana 0
 function mm(d){const y=+d.slice(0,4),m=+d.slice(5,7);if(+d.slice(8,10)>=21){const t=new Date(Date.UTC(y,m,1));return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')}return d.slice(0,7)} // Mes_Medicao_Num: dia 21 em diante conta no mês seguinte
@@ -444,6 +462,24 @@ function build(S){
  m.corrs=uniq([...Object.values(m.sites),...m.exec.map(r=>r.corr)]).filter(x=>!x.startsWith('(')).sort();
  m.siteList=Object.keys(m.sites);m.ativos=uniq(m.cart.map(r=>r.ativo).filter(Boolean)).sort();
  return m}
+
+/* ---------- ano de medição ----------
+   O ano vai de 21/12 a 20/12 (mesma regra do mês de medição: dia 21 em diante conta no mês seguinte).
+   Cada ano mostra só os seus dados; o ano novo começa zerado no dia 21/12. */
+const anoMed=d=>mm(d).slice(0,4);
+let M0=null,ANO=null;
+function anosDe(m){return uniq([...m.exec,...m.wt,...m.imp,...m.ef].map(r=>anoMed(r.d))).sort()}
+function viewAno(m0,ano){
+ const f=r=>anoMed(r.d)===ano,m=Object.assign({},m0);
+ ['exec','wt','imp','ef'].forEach(k=>m[k]=m0[k].filter(f));
+ m.fato=TINTAS_ACUMULA_ANOS?m0.fato:m0.fato.filter(f);
+ m.meta=m0.meta.filter(r=>r.ym.slice(0,4)===ano);
+ const all=[...m.exec.map(r=>r.d),...m.wt.map(r=>r.d),...m.imp.map(r=>r.d)].sort();
+ m.last=all[all.length-1];m.months=uniq(all.map(d=>mm(d))).sort();return m}
+function setAno(a){ANO=a;CS.ini='';M=viewAno(M0,ANO);F=newF();DAY=null;draw()}
+function renderAno(){
+ const anos=anosDe(M0),el=$('#anoBox');el.hidden=page&&page.ano===false;
+ el.innerHTML=`<label for="ano">Ano</label><select id="ano" aria-label="Ano de medição" title="Ano de medição: de 21/12 a 20/12">${anos.map(a=>`<option value="${a}" ${a===ANO?'selected':''}>${a}</option>`).join('')}</select>`}
 
 /* ---------- filtros ---------- */
 const newF=()=>({sem:new Set(),imp:new Set(),grp:new Set(),desc:new Set(),wgrp:new Set(),per:new Set(),cor:new Set(),site:new Set(),ativo:new Set(),plano:new Set(),prio:new Set()});
@@ -543,7 +579,7 @@ function pgGeral(){
  if(!E.length)return card('c12','',empty);
  const jat=jatA(E),aca=acaA(E),prep=prepA(E);
  const dates=E.map(r=>r.d).sort(),ref=dates[dates.length-1],refYM=mm(ref);
- const months=F.per.size?new Set([...F.per].map(v=>v.startsWith('M:')?v.slice(2):mm(v.slice(2)))):new Set(M.meta.map(r=>r.ym).filter(y=>y<=META_MES_FIM));
+ const months=F.per.size?new Set([...F.per].map(v=>v.startsWith('M:')?v.slice(2):mm(v.slice(2)))):new Set(M.meta.map(r=>r.ym).filter(y=>y<=(META_FIM_ANO[ANO]||refYM)));
  const ca=corrAllowed(),meta=metaDe(months,ca);
  const efR=M.ef.filter(r=>pass(r,{per:1,geo:1})),efAvg=efR.length?sum(efR,r=>r.n)/efR.length:null,dias=new Set(E.map(r=>r.d)).size;
  const destino=efAvg==null?0:efAvg*META_PESSOA*dias; // [Destino] = [Efetivo] × [Meta m² Pessoa] × [Dias de Execução]
@@ -555,7 +591,7 @@ function pgGeral(){
  h+=card('c4','Acabamento | Meta acumulada',ch(250,{fit:c=>{const W=c.getWidth(),H=c.getHeight(),r=Math.min(W,H)*.46,w=Math.max(10,Math.min(22,r*.2)),hole=2*(r-w),t=nf(+aca.toFixed(2)),fs=Math.max(14,Math.min(30,hole/(t.length*.5)));c.setOption({series:[{progress:{width:w},axisLine:{lineStyle:{width:w}},axisLabel:{distance:-(w+12),fontSize:Math.max(10,Math.min(12,r/8))}},{},{detail:{fontSize:fs}}]})},series:[
   {type:'gauge',z:2,min:0,max:Math.max(meta,aca,destino,1),startAngle:200,endAngle:-20,radius:'92%',center:['50%','62%'],progress:{show:true,width:22,itemStyle:{color:C.teal}},axisLine:{lineStyle:{width:22,color:[[1,C.track]]}},pointer:{show:false},axisTick:{show:false},splitLine:{show:false},axisLabel:{color:C.muted,distance:-34,formatter:v=>v===0||v>=Math.max(meta,aca,destino,1)-1?nf(v,0):''},detail:{show:false},data:[{value:+aca.toFixed(2)}]},
   {type:'gauge',z:3,min:0,max:Math.max(meta,aca,destino,1),startAngle:200,endAngle:-20,radius:'92%',center:['50%','62%'],axisLine:{show:false},axisTick:{show:false},splitLine:{show:false},axisLabel:{show:false},pointer:{show:true,length:'96%',width:4,offsetCenter:[0,0],itemStyle:{color:C.amber}},anchor:{show:false},detail:{show:false},data:[{value:+destino.toFixed(2)}]},
-  {type:'gauge',z:5,silent:true,min:0,max:Math.max(meta,aca,destino,1),startAngle:200,endAngle:-20,radius:'92%',center:['50%','62%'],axisLine:{show:false},axisTick:{show:false},splitLine:{show:false},axisLabel:{show:false},pointer:{show:false},anchor:{show:false},detail:{valueAnimation:false,offsetCenter:[0,'8%'],fontSize:30,fontFamily:'Barlow Condensed,Arial Narrow,Arial,sans-serif',color:C.ink,formatter:()=>nf(aca)},data:[{value:+aca.toFixed(2)}]}]})+`<div class="note">Marcador amarelo: Destino = efetivo médio (${nf(efAvg)}) × ${nf(META_PESSOA,1)} m²/pessoa × ${dias} dias de execução = ${nf(destino)} m².<br>Meta acumulada: fixa, soma das medições até ${META_MES_FIM.slice(5)}/${META_MES_FIM.slice(0,4)}; não varia com a data.</div>`);
+  {type:'gauge',z:5,silent:true,min:0,max:Math.max(meta,aca,destino,1),startAngle:200,endAngle:-20,radius:'92%',center:['50%','62%'],axisLine:{show:false},axisTick:{show:false},splitLine:{show:false},axisLabel:{show:false},pointer:{show:false},anchor:{show:false},detail:{valueAnimation:false,offsetCenter:[0,'8%'],fontSize:30,fontFamily:'Barlow Condensed,Arial Narrow,Arial,sans-serif',color:C.ink,formatter:()=>nf(aca)},data:[{value:+aca.toFixed(2)}]}]})+`<div class="note">Marcador amarelo: Destino = efetivo médio (${nf(efAvg)}) × ${nf(META_PESSOA,1)} m²/pessoa × ${dias} dias de execução = ${nf(destino)} m².<br>Meta acumulada: ${META_FIM_ANO[ANO]?`fixa, soma das medições até ${META_FIM_ANO[ANO].slice(5)}/${META_FIM_ANO[ANO].slice(0,4)}; não varia com a data`:`soma das metas mensais até ${refYM.slice(5)}/${refYM.slice(0,4)}`}.</div>`);
  h+=card('c4','Preparação | Acabamento',`<div class="pct">100%</div><div class="bar2"><div class="r"><span>Preparação</span><div class="b" style="width:100%">${nf(prep)}</div></div><div class="r"><span>Acabamento</span><div class="b" style="width:${Math.max(8,Math.min(100,prep?aca/prep*100:0))}%">${nf(aca)}</div></div></div><div class="pct">${nf(prep?aca/prep*100:null,1)}%</div>`);
  const E0=M.exec.filter(r=>pass(r,{per:1,geo:1,ativo:1,plano:1,ex:'sem'})),I=M.imp.filter(r=>pass(r,{per:1,geo:1,ex:'sem'})),iw=weekly(I,r=>r.h),ws=Object.keys(iw).map(Number).sort((a,b)=>a-b);
  h+=card('c4','Horas de impacto por semana',ch(250,{click:i=>{if(ws[i]!=null)tog(F.sem,String(ws[i]))},grid:{left:40,right:10,top:20,bottom:36},xAxis:ax({type:'category',data:ws,name:'Semana',nameLocation:'middle',nameGap:24,splitLine:{show:false}}),yAxis:ax({type:'value'}),tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},formatter:p=>`Semana ${p[0].name}<br><b>${nh(p[0].value)}</b>`},series:[{type:'bar',data:ws.map(w=>({value:+iw[w].toFixed(2),itemStyle:{opacity:!F.sem.size||F.sem.has(String(w))?1:.35}})),itemStyle:{color:C.teal,borderRadius:[3,3,0,0]},barMaxWidth:14}]}));
@@ -571,7 +607,7 @@ function pgGeral(){
 let DAY=null;
 function pgDia(){
  const ds=uniq(M.exec.map(r=>r.d)).sort().reverse();if(!DAY||!ds.includes(DAY))DAY=ds[0];
- const D=M.exec.filter(r=>r.d===DAY),ym=mm(DAY),yr=DAY.slice(0,4);
+ const D=M.exec.filter(r=>r.d===DAY),ym=mm(DAY),yr=ym.slice(0,4);
  const efs=M.ef.filter(r=>r.d===DAY),ef=efs.length?sum(efs,r=>r.n)/efs.length:0;
  let h=`<section class="card c12"><div class="dayrow"><label for="dsel"><b>Dia do relatório</b></label><select id="dsel">${ds.map(d=>`<option value="${d}" ${d===DAY?'selected':''}>${fd(d)}</option>`).join('')}</select></div></section>`;
  const cs=uniq(D.map(r=>r.corr)).sort();let tb='';
@@ -579,15 +615,142 @@ function pgDia(){
   uniq(R.map(r=>r.site||'(Sem site)')).forEach(s=>{const Q=R.filter(r=>(r.site||'(Sem site)')===s);tb+=`<tr class="sub" hidden data-c="${esc(c)}"><td>${esc(s)}</td><td class="n">${nf(st2A(Q))}</td><td class="n">${nf(st3A(Q))}</td><td class="n">${nf(jatA(Q))}</td><td class="n">${nf(acaA(Q))}</td></tr>`})});
  h+=card('c7','Área por corredor (m²)',`<div class="tw"><table><thead><tr><th>Corredor</th><th class="n">Área ST2</th><th class="n">Área ST3</th><th class="n">Área Jateamento</th><th class="n">Área Acabamento</th></tr></thead><tbody>${tb}<tr class="tot"><td>Total</td><td class="n">${nf(st2A(D))}</td><td class="n">${nf(st3A(D))}</td><td class="n">${nf(jatA(D))}</td><td class="n">${nf(acaA(D))}</td></tr></tbody></table></div>`);
  h+=card('c5','Produção por efetivo',`<div class="kpis">${kpi(ef?prepA(D)/ef:null,'Área Preparação por Efetivo')}${kpi(ef||null,'Efetivo Disponível')}</div><div class="kpis" style="margin-top:12px">${kpi(ef?acaA(D)/ef:null,'Área Acabamento por Efetivo')}${kpiH(efs.length?Math.max(...efs.map(r=>r.n))*hDia(DAY):null,'HHT Disponível')}${ef?'':'<div class="note">Sem efetivo lançado para este dia na aba Efetivo.</div>'}`);
- const mM=M.exec.filter(r=>mm(r.d)===ym&&r.d<=DAY),yY=M.exec.filter(r=>r.d.slice(0,4)===yr&&r.d<=DAY);
+ const mM=M.exec.filter(r=>mm(r.d)===ym&&r.d<=DAY),yY=M.exec.filter(r=>mm(r.d).slice(0,4)===yr&&r.d<=DAY);
  const metaM=metaDe(new Set([ym])),metaY=metaDe(new Set(M.meta.filter(r=>r.ym.slice(0,4)===yr).map(r=>r.ym)));
  const pg=(t,v,m,col)=>`<div class="card prog"><span class="lbl" style="background:${col}">${t}</span><span class="big">${nf(v)} m²</span><div class="trk"><i style="width:${Math.min(100,m?v/m*100:0)}%;background:${col}"></i></div><div class="tg"><span>Target ${nf(m,0)} m²</span><span>${nf(m?v/m*100:null,1)}%</span></div></div>`;
  h+=`<div class="c5 sub4">${pg('Jateamento Mês',jatA(mM),metaM,C.teal)}${pg('Acabamento Mês',acaA(mM),metaM,C.amber)}${pg('Jateamento Ano',jatA(yY),metaY,C.teal)}${pg('Acabamento Ano',acaA(yY),metaY,C.amber)}</div>`;
- const W=M.wt.filter(r=>r.d===DAY);
- h+=card('c7','Horas por atividade (HHT)',W.length?donut(grpSum(W,r=>r.desc,r=>r.hht),300,{unit:'HHT'}):empty);
- const I=M.imp.filter(r=>r.d===DAY);
- h+=card('c12','Registro de impactos',I.length?`<div class="tw"><table><thead><tr><th>Site</th><th class="n">Horas</th><th>Grupo</th><th>Impacto</th><th>Descrição</th></tr></thead><tbody>${I.map(r=>`<tr><td>${esc(r.site)}</td><td class="n">${nh(r.h)}</td><td>${esc(r.grupo)}</td><td>${esc(r.impacto)}</td><td class="wrap">${esc(r.desc)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum impacto registrado neste dia.</div>');
+ h+=csCard();
  return h}
+
+/* ---------- Curva S | Desvio meta ----------
+   Base (100%): Desvio Meta no início = meta acumulada (ou escopo da área) − realizado antes da data de início.
+   Previsto: essa falta ÷ dias selecionados até a data limite (padrão dia 18), acumulado em %.
+   Realizado: o que foi feito a partir do início, em % da falta, até o dia do relatório. */
+const ARQ_PRI='ativos_prioritarios.json';
+let PRI=null,PRI_SRC='',PRI_LOADING=true;
+const CS_MAX_DIAS=1100; // limite do intervalo da curva S (≈3 anos)
+const CS_CORR_PADRAO='Paraopeba Norte'; // corredor que a curva S abre selecionado (se existir nos dados); '' = todos
+const CS={ini:'',fim:'',grp:'',ov:{},open:false,cor:null};
+const p2=n=>String(n).padStart(2,'0');
+const addD=(a,k)=>{const d=new Date(a+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+k);return d.toISOString().slice(0,10)};
+const dow=d=>new Date(d+'T00:00:00Z').getUTCDay();
+const DSEM=['dom','seg','ter','qua','qui','sex','sáb'];
+function csDias(){const o=[];if(!CS.ini||!CS.fim||CS.fim<CS.ini||(new Date(CS.fim)-new Date(CS.ini))/864e5>CS_MAX_DIAS)return o;
+ for(let d=CS.ini;d<=CS.fim;d=addD(d,1)){const w=dow(d);o.push({d,w,on:CS.ov[d]??(w>=1&&w<=5)})}return o}
+function csPadrao(){
+ const dts=(PRI?PRI.ativos:[]).flatMap(a=>a.medicoes.map(m=>m.d)).filter(Boolean).sort(),hj=new Date();
+ if(!CS.ini){ // padrão: dia 21 que abre o mês de medição do dia do relatório
+  if(DAY){const ym=mm(DAY),t=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7)-2,21));CS.ini=t.toISOString().slice(0,10)}
+  else CS.ini=ANO?(+ANO-1)+'-12-21':(dts[0]||hj.getFullYear()+'-01-01')}
+ if(!CS.fim){const m=hj.getDate()<=18?hj:new Date(hj.getFullYear(),hj.getMonth()+1,1);CS.fim=m.getFullYear()+'-'+p2(m.getMonth()+1)+'-18'}}
+function csMeta(cor){ // mesma Meta Acumulada da Visão Geral, para o corredor escolhido
+ const ref=M.exec.map(r=>r.d).sort().pop(),refYM=ref?mm(ref):'';
+ return metaDe(new Set(M.meta.map(r=>r.ym).filter(y=>y<=(META_FIM_ANO[ANO]||refYM))),cor?new Set([cor]):null)}
+function csCard(){
+ const tit=PRI&&CS.grp?`Curva S | ${esc(CS.grp)} – falta do escopo (%)`:'Curva S | Desvio meta – falta para fechar o ano (%)';
+ csPadrao();
+ const cors=uniq(M.meta.map(r=>r.corr).filter(Boolean)).sort();
+ if(CS.cor===null)CS.cor=cors.includes(CS_CORR_PADRAO)?CS_CORR_PADRAO:'';if(CS.cor&&!cors.includes(CS.cor))CS.cor='';
+ const grpOn=!!(PRI&&CS.grp&&PRI.ativos.some(a=>a.grupo===CS.grp)); // área escolhida = curva pelo escopo da área
+ const Ag=grpOn?PRI.ativos.filter(a=>a.grupo===CS.grp):[];
+ const meta=grpOn?sum(Ag,a=>a.escopo):csMeta(CS.cor);
+ const acaRows=grpOn?Ag.flatMap(a=>a.medicoes).filter(m=>m.d).map(m=>({d:m.d,area:m.a})):M.exec.filter(r=>r.etapa==='Acabamento'&&(!CS.cor||r.corr===CS.cor));
+ const nomeBase=grpOn?`Escopo total (${esc(CS.grp)})`:`Meta acumulada${CS.cor?' ('+esc(CS.cor)+')':''}`;
+ const dias=csDias(),uteis=dias.filter(x=>x.on).map(x=>x.d),N=uteis.length;
+ const ddTxt=dias.length?`${N} dia${N===1?'':'s'} selecionado${N===1?'':'s'}`:'Intervalo inválido';
+ const pn=dias.map(x=>`<label class="${x.w===0||x.w===6?'fds':''}"><input type="checkbox" data-csd="${x.d}" ${x.on?'checked':''}>${DSEM[x.w]} ${fd(x.d)}</label>`).join('');
+ const grupos=PRI?uniq(PRI.ativos.map(a=>a.grupo)):[];if(CS.grp&&!grupos.includes(CS.grp))CS.grp='';
+ const ctl=`<div class="cs-ctl">
+  <label>Corredor<select id="csCor"${PRI&&CS.grp?' disabled title="Com uma área selecionada, a curva usa o escopo da área"':''}><option value="">Todos</option>${cors.map(c=>`<option value="${esc(c)}"${c===CS.cor?' selected':''}>${esc(c)}</option>`).join('')}</select></label>
+  <label>Início<input type="date" id="csIni" value="${CS.ini}"></label>
+  <label>Data limite<input type="date" id="csFim" value="${CS.fim}"></label>
+  <div class="dd csdd"><label>Dias considerados</label><button type="button" data-csdd="1" aria-haspopup="true">${ddTxt}</button><div class="pn" ${CS.open?'':'hidden'} data-cspn="1"><button class="clr" type="button" data-csreset="1">Padrão (segunda a sexta)</button>${pn}</div></div>
+  ${PRI?`<label>Área (ativos prioritários)<select id="csGrp"><option value="">Desvio Meta</option>${grupos.map(g=>`<option value="${esc(g)}"${g===CS.grp?' selected':''}>${esc(g)}</option>`).join('')}</select></label>`:''}
+ </div>`;
+ // ativos prioritários: escopo total e realizado (informativo)
+ let pri='';
+ if(PRI){const A=PRI.ativos.filter(a=>!CS.grp||a.grupo===CS.grp),eT=sum(A,a=>a.escopo),rT=sum(A.flatMap(a=>a.medicoes).filter(m=>m.d&&(!DAY||m.d<=DAY)),m=>m.a);
+  pri=`<span>Ativos prioritários${CS.grp?' ('+esc(CS.grp)+')':''}: escopo total <b>${nf(eT)} m²</b> · realizado <b>${nf(rT)} m²</b> (${nf(eT?rT/eT*100:null,1)}%) · pendente <b>${nf(Math.max(0,eT-rT))} m²</b></span>`}
+ else if(!PRI_LOADING)pri=`<span>Arquivo ${ARQ_PRI} não encontrado.</span>`;
+ // acumulados pré-calculados (busca binária) para não pesar com períodos longos
+ const rs=[...acaRows].sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0),rd=rs.map(r=>r.d),rc=[];rs.reduce((s,r,i)=>(rc[i]=s+r.area),0);
+ const ub=(arr,d)=>{let lo=0,hi=arr.length;while(lo<hi){const m=(lo+hi)>>1;if(arr[m]<=d)lo=m+1;else hi=m}return lo}; // qtd de itens <= d
+ const realAte=d=>{const k=ub(rd,d);return k?rc[k-1]:0};               // realizado acumulado até o dia (desde o início do ano)
+ // Desvio Meta no início: o que falta da meta (ou escopo) para fechar, descontando o já realizado antes do início
+ const antes=CS.ini?realAte(addD(CS.ini,-1)):0,falta=Math.max(0,meta-antes);
+ const ref0=DAY&&DAY<CS.fim?DAY:CS.fim,desvAtual=realAte(ref0)-meta;
+ const totLin=`<span>${nomeBase} <b>${nf(meta)} m²</b> · realizado até ${fd(ref0)} <b>${nf(realAte(ref0))} m²</b> · desvio meta atual <b class="${desvAtual<0?'neg':''}">${nf(desvAtual)} m²</b></span>`;
+ if(!N||!meta||!falta)return card('c7',tit,ctl+`<div class="empty">${!meta?(grpOn?'Sem escopo para a área selecionada.':'Sem meta acumulada para o ano.'):!falta?'Meta já atingida antes da data de início: não há desvio a recuperar.':'Nenhum dia selecionado no intervalo.'}</div><div class="cs-res">${totLin}${pri}</div>`);
+ const base=falta/N,corte=ref0;
+ const feitoAte=d=>realAte(d)-antes;                                    // realizado a partir do início
+ const prevAte=d=>ub(uteis,d)*base;                                     // previsto acumulado sobre o desvio (m²)
+ const uSet=new Set(uteis);
+ const xs=uniq([...uteis,...acaRows.map(r=>r.d).filter(d=>d>=CS.ini&&d<=CS.fim)]).sort();
+ const ultR=acaRows.map(r=>r.d).filter(d=>d<=corte).sort().pop();
+ const info=xs.map(d=>{const prev=prevAte(d),ant=feitoAte(addD(d,-1)),hojeR=feitoAte(d)-ant,util=uSet.has(d);
+  return{d,prev,real:ultR&&d<=ultR?Math.max(0,feitoAte(d)):null,metaDia:util?Math.max(0,prev-ant):null,hojeR}});
+ const plan=info.map(x=>+(x.prev/falta*100).toFixed(2)),real=info.map(x=>x.real==null?null:+(x.real/falta*100).toFixed(2));
+ const iDay=xs.indexOf(DAY);
+ const graf=ch(460,{
+  legend:{bottom:0,textStyle:{color:C.muted},icon:'roundRect',data:['Previsto','Realizado']},
+  grid:{left:46,right:18,top:26,bottom:54},
+  xAxis:ax({type:'category',data:xs.map(d=>xs[0].slice(0,4)!==xs[xs.length-1].slice(0,4)?fd(d).slice(0,6)+d.slice(2,4):fd(d).slice(0,5)),boundaryGap:false,splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),
+  yAxis:ax({type:'value',min:0,max:v=>Math.max(100,Math.ceil(v.max/10)*10),axisLabel:{color:C.muted,formatter:v=>v+'%'}}),
+  tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},confine:true,
+   formatter:p=>{const x=info[p[0].dataIndex];return `<b>${DSEM[dow(x.d)]} ${fd(x.d)}</b>`
+    +p.map(s=>`<br>${s.marker}${s.seriesName}: <b>${s.value==null?'–':nf(s.value,1)+'%'}</b>${s.value==null?'':' ('+nf(s.value/100*falta)+' m²)'}`).join('')
+    +(x.metaDia!=null?`<br>Meta do dia (com pendência/excedente): <b>${nf(x.metaDia)} m²</b>`:'')
+    +`<br>${grpOn?'Medido':'Acabamento'} no dia: <b>${nf(x.hojeR)} m²</b>`}},
+  series:[
+   {name:'Previsto',type:'line',data:plan,symbol:'circle',symbolSize:4,lineStyle:{color:C.teal,width:3},itemStyle:{color:C.teal},
+    label:{show:true,position:'top',color:C.ink,fontSize:11,formatter:p=>nf(p.value,0)+'%'},labelLayout:{hideOverlap:true},
+    markLine:iDay>=0?{silent:true,symbol:'none',lineStyle:{color:C.muted,type:'dashed'},label:{formatter:'Dia do relatório',color:C.muted,fontSize:10},data:[{xAxis:iDay}]}:undefined},
+   {name:'Realizado',type:'line',data:real,symbol:'circle',symbolSize:4,lineStyle:{color:C.amber,width:3},itemStyle:{color:C.amber},
+    label:{show:true,position:'bottom',color:C.amber,fontSize:10,formatter:p=>p.value==null?'':nf(p.value,0)+'%'},labelLayout:{hideOverlap:true}}]});
+ // situação no dia do relatório e meta do próximo dia útil
+ const ref=corte,pR=prevAte(ref),rR=Math.max(0,feitoAte(ref)),saldo=rR-pR,prox=uteis.find(u=>u>ref);
+ const metaProx=prox?Math.max(0,prevAte(prox)-rR):null;
+ const res=`<div class="cs-res">
+  <span>Desvio meta em ${fd(CS.ini)} (falta para fechar) <b>${nf(falta)} m²</b> · ${N} dias · meta diária <b>${nf(base)} m²</b></span>
+  ${totLin}
+  <span>Em ${fd(ref)}: previsto <b>${nf(pR/falta*100,1)}%</b> (${nf(pR)} m²) · realizado <b>${nf(rR/falta*100,1)}%</b> (${nf(rR)} m²) · ${saldo<0?'pendente':'excedente'} <b class="${saldo<0?'neg':''}">${nf(Math.abs(saldo))} m²</b></span>
+  ${prox?`<span>Meta para ${fd(prox)}: <b>${nf(metaProx)} m²</b> (${nf(base)} ${saldo<0?'+ '+nf(-saldo)+' pendente':'− '+nf(saldo)+' excedente'})</span>`:''}
+  ${pri}${PRI_SRC==='preview'?'<span><b>Ativos: pré-visualização local</b></span>':''}</div>`;
+ return card('c7',tit,ctl+graf+res)}
+function csReabre(st){if(!CS.open)return;const pn=document.querySelector('[data-cspn]');if(pn){pn.hidden=false;pn.scrollTop=st}}
+$('#main').addEventListener('click',e=>{
+ const b=e.target.closest('[data-csdd]');
+ if(b){const pn=b.nextElementSibling;pn.hidden=!pn.hidden;CS.open=!pn.hidden;return}
+ if(e.target.closest('[data-csreset]')){const st=document.querySelector('[data-cspn]').scrollTop;CS.ov={};draw();csReabre(st)}});
+$('#main').addEventListener('change',e=>{const t=e.target;
+ if(t.dataset.csd){const st=document.querySelector('[data-cspn]').scrollTop,w=dow(t.dataset.csd),def=w>=1&&w<=5;if(t.checked===def)delete CS.ov[t.dataset.csd];else CS.ov[t.dataset.csd]=t.checked;draw();csReabre(st);return}
+ if(t.id==='csGrp'){CS.grp=t.value;draw()}
+ else if(t.id==='csCor'){CS.cor=t.value;draw()}
+ else if(t.id==='csIni'||t.id==='csFim'){
+  // o campo de data dispara a cada dígito do ano (ex.: 0002); só aplica datas completas e razoáveis
+  const v=t.value,y=+v.slice(0,4);if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||y<2000||y>2100)return;
+  const ini=t.id==='csIni'?v:CS.ini,fim=t.id==='csFim'?v:CS.fim;
+  if(ini&&fim&&(new Date(fim)-new Date(ini))/864e5>CS_MAX_DIAS){toast('Período muito longo: use no máximo 3 anos entre o início e a data limite.');return}
+  if(t.id==='csIni')CS.ini=v;else CS.fim=v;draw()}});
+document.addEventListener('click',e=>{if(!e.target.closest('.csdd'))CS.open=false});
+/* Lê a planilha de ativos prioritários (cada aba = 1 ativo): escopo na linha "ESCOPO TOTAL PREVISTO"; medições nas colunas E (data) e F (área) */
+function parsePri(wb){
+ const out=[];
+ wb.SheetNames.forEach(n=>{
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null});
+  const hi=rows.findIndex(r=>String(r[1]??'').toUpperCase().includes('ESCOPO'));
+  if(hi<0||!rows[hi+1])return;
+  const nome=String(rows[hi+1][0]??'').trim();if(!nome)return;
+  const med=[];rows.slice(hi+1).forEach(r=>{if(r[5]==null||r[5]==='')return;med.push({d:iso(r[4]),a:+num(r[5]).toFixed(2)})});
+  med.sort((x,y)=>(x.d||'')<(y.d||'')?-1:(x.d||'')>(y.d||'')?1:0);
+  const p=nome.split(' - ');
+  out.push({aba:n,grupo:p.length>1?p[0].trim():nome,nome,escopo:+num(rows[hi+1][1]).toFixed(2),medicoes:med})});
+ return out}
+async function priLoad(){
+ PRI_LOADING=true;
+ try{const r=await fetch(ARQ_PRI,{cache:'no-cache'});if(r.ok){PRI=await r.json();PRI_SRC='publicado'}}catch(_){}
+ PRI_LOADING=false;$('#expPri').hidden=!PRI;
+ if(M&&page)draw()}
 
 /* ---------- Wrench Time ---------- */
 function pgWrench(){
@@ -908,12 +1071,14 @@ $('#chips').addEventListener('click',e=>{
  if(e.target.closest('[data-call]')){CHIPS.forEach(([k])=>F[k].clear());draw();return}
  const b=e.target.closest('[data-ck]');if(!b)return;F[b.dataset.ck].delete(b.dataset.cv);draw()});
 function draw(){
+ if(!M0||!page)return; // dados ainda não carregados
  charts.forEach(c=>c.dispose());charts=[];post=[];cid=0;readC();
  $('#tabs').innerHTML=PAGES.map(p=>`<a href="#${p.id}" class="${p===page?'on':''}">${p.name}</a>`).join('');
- renderFilters();renderChips();$('#main').dataset.p=page.id;$('#main').innerHTML=page.fn();post.forEach(f=>f());fitTables();
- $('#foot').textContent=`Dados até ${fd(M.last)} · `+`Developer by Pedro Santos`;
+ renderAno();renderFilters();renderChips();$('#main').dataset.p=page.id;$('#main').innerHTML=page.fn();post.forEach(f=>f());fitTables();
+ $('#foot').textContent=`Dados até ${fd(M.last)} · Ano ${ANO} · `+`Developer by Pedro Santos`;
 }
 $('#main').addEventListener('click',e=>{const g=e.target.closest('tr.grp');if(!g)return;g.classList.toggle('open');const k=g.dataset.g;[...g.parentNode.querySelectorAll('tr.sub')].filter(r=>r.dataset.c===k).forEach(r=>r.hidden=!r.hidden)});
+$('#anoBox').addEventListener('change',e=>{if(e.target.id==='ano')setAno(e.target.value)});
 $('#main').addEventListener('change',e=>{if(e.target.id==='dsel'){DAY=e.target.value;draw()}});
 function route(){const id=location.hash.slice(1);page=PAGES.find(p=>p.id===id)||PAGES[0];draw()}
 addEventListener('hashchange',route);
@@ -923,7 +1088,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>draw())
 new MutationObserver(()=>draw()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,5000)}
 let CUR=null,SRC='';
-function load(S,src){CUR=S;SRC=src;M=build(S);F=newF();$('#reset').hidden=src!=='preview';$('#exp').hidden=false;route()}
+function load(S,src){CUR=S;SRC=src;M0=build(S);const anos=anosDe(M0);if(!anos.includes(ANO))ANO=anos[anos.length-1]||String(new Date().getFullYear());M=viewAno(M0,ANO);F=newF();$('#reset').hidden=src!=='preview';$('#exp').hidden=false;route()}
 // Protege as ações de atualização e exportação com senha.
 // Observação: em um HTML estático, esta proteção é apenas de interface.
 const SENHA_EDICAO='0000';
@@ -940,6 +1105,15 @@ $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;
   load(S,'preview');toast('Planilha '+f.name+' carregada só neste navegador. Para publicar, clique em Exportar dados.json.')}
  catch(err){toast('Não foi possível ler o arquivo: '+err.message)}e.target.value=''};
 $('#exp').onclick=()=>{if(!autorizarEdicao())return;try{const b=new Blob([JSON.stringify(CUR)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='dados.json';document.body.appendChild(a);a.click();a.remove();toast('dados.json gerado. Suba esse arquivo no GitHub para atualizar o site.')}catch(err){toast('Não foi possível gerar o arquivo: '+err.message)}};
+const filePri=document.createElement('input');filePri.type='file';filePri.accept='.xlsx,.xlsm';filePri.hidden=true;document.body.appendChild(filePri);
+$('#upPri').onclick=()=>{if(autorizarEdicao())filePri.click()};
+filePri.onchange=async e=>{const f=e.target.files[0];if(!f)return;
+ try{const at=parsePri(XLSX.read(await f.arrayBuffer(),{type:'array'}));
+  if(!at.length){toast('Planilha não carregada: nenhuma aba com “ESCOPO TOTAL PREVISTO” foi encontrada.');return}
+  PRI={fonte:f.name,ativos:at};PRI_SRC='preview';$('#expPri').hidden=false;draw();$('#reset').hidden=false;
+  toast('Planilha '+f.name+' carregada só neste navegador. Para publicar, clique em Exportar ativos_prioritarios.json.')}
+ catch(err){toast('Não foi possível ler o arquivo: '+err.message)}finally{e.target.value=''}};
+$('#expPri').onclick=()=>{if(!autorizarEdicao())return;try{const b=new Blob([JSON.stringify(PRI)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=ARQ_PRI;document.body.appendChild(a);a.click();a.remove();toast(ARQ_PRI+' gerado. Suba esse arquivo no GitHub (ao lado do index.html) para atualizar o site.')}catch(err){toast('Não foi possível gerar o arquivo: '+err.message)}};
 // Alterna entre o tema verde claro e o modo escuro.
 const bgToggle=$('#bgToggle');
 function setTheme(mode){
@@ -972,13 +1146,14 @@ async function init(){
  if(!S&&EMBED){S=EMBED;src='embutido'}
  if(!S){$('#main').innerHTML=card('c12','','<div class="empty">Nenhum dado encontrado. Coloque o arquivo dados.json ao lado do index.html ou clique em Atualizar planilha.</div>');return}
  load(S,src)}
-$('#reset').onclick=init;
-init();
+$('#reset').onclick=()=>{init();PRI=null;PRI_SRC='';priLoad()};
+init();priLoad();
 // PWA: registra o service worker (funciona em HTTPS ou localhost)
 if('serviceWorker' in navigator){
  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW não registrado:',err)));
 }
 </script>
+
 
 </body>
 </html>
