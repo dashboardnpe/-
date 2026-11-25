@@ -1,6 +1,6 @@
 // Service worker do Dashboard NPE Vale
 // Ao alterar qualquer arquivo do app, aumente a versão abaixo para forçar a atualização.
-const VERSAO = 'dashboard-npe-v17';
+const VERSAO = 'dashboard-npe-v24';
 const CACHE_APP = VERSAO + '-app';
 const CACHE_EXT = VERSAO + '-ext';
 
@@ -9,6 +9,7 @@ const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
   './dados.json',
+  './ativos_prioritarios.json',
   './imagens/npelogob.png',
   './imagens/valelogob.png',
   './icons/icon-192.png',
@@ -42,7 +43,7 @@ self.addEventListener('activate', e => {
   })());
 });
 
-// Rede primeiro, com cache de reserva: usado para dados.json e páginas (dados sempre atualizados quando online).
+// Rede primeiro, com cache de reserva: usado para dados.json, ativos_prioritarios.json e páginas (dados sempre atualizados quando online).
 async function redePrimeiro(req) {
   const cache = await caches.open(CACHE_APP);
   try {
@@ -74,7 +75,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
 
   if (url.origin === location.origin) {
-    if (req.mode === 'navigate' || url.pathname.endsWith('/dados.json') || url.pathname.endsWith('/index.html')) {
+    if (req.mode === 'navigate' || url.pathname.endsWith('/dados.json') || url.pathname.endsWith('/ativos_prioritarios.json') || url.pathname.endsWith('/index.html')) {
       e.respondWith(redePrimeiro(req));
     } else {
       e.respondWith(cachePrimeiro(req, CACHE_APP));
