@@ -363,6 +363,8 @@ body{background:var(--bg)}
 .cs-ctl>label{display:flex;flex-direction:column;font-size:11px;font-weight:600;color:var(--muted);gap:2px}
 .cs-ctl select,.cs-ctl input{padding:4px 6px;font-size:12px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:4px;font-family:inherit}
 .cs-ctl .dd{min-width:170px}
+.cs-ctl .csatdd>button{max-width:260px}
+.cs-ctl .csatdd>button{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cs-ctl .dd>label{color:var(--muted)}
 .cs-ctl .dd>button{font-size:12px;padding:4px 8px}
 .cs-ctl .pn{max-height:260px}
@@ -370,6 +372,11 @@ body{background:var(--bg)}
 .cs-res{display:flex;gap:4px 18px;flex-wrap:wrap;font-size:12px;color:var(--muted);flex:0 0 auto;margin-top:4px}
 .cs-res b{color:var(--ink);font-variant-numeric:tabular-nums}
 .cs-res b.neg{color:var(--red)}
+@media (min-width:981px) and (min-height:600px){
+ .card.cs-card{overflow:auto}
+ .card.cs-card>.chart{min-height:260px}
+ .cs-res{font-size:11px;gap:2px 14px}
+}
 </style>
 </head>
 <body>
@@ -609,16 +616,19 @@ function pgDia(){
  const ds=uniq(M.exec.map(r=>r.d)).sort().reverse();if(!DAY||!ds.includes(DAY))DAY=ds[0];
  const D=M.exec.filter(r=>r.d===DAY),ym=mm(DAY),yr=ym.slice(0,4);
  const efs=M.ef.filter(r=>r.d===DAY),ef=efs.length?sum(efs,r=>r.n)/efs.length:0;
- let h=`<section class="card c12"><div class="dayrow"><label for="dsel"><b>Dia do relatório</b></label><select id="dsel">${ds.map(d=>`<option value="${d}" ${d===DAY?'selected':''}>${fd(d)}</option>`).join('')}</select></div></section>`;
+ const cors=csCorInit(),corSet=CS.cor?new Set([CS.cor]):null,corTag=CS.cor?' | '+esc(CS.cor.replace(/^Paraopeba\s+/i,'')):'';
+ let h=`<section class="card c12"><div class="dayrow"><label for="dsel"><b>Dia do relatório</b></label><select id="dsel">${ds.map(d=>`<option value="${d}" ${d===DAY?'selected':''}>${fd(d)}</option>`).join('')}</select>
+  <label for="csCor"><b>Corredor</b></label><select id="csCor" title="Vale para os cartões de Jateamento/Acabamento e para a Curva S"><option value="">Todos</option>${cors.map(c=>`<option value="${esc(c)}"${c===CS.cor?' selected':''}>${esc(c)}</option>`).join('')}</select></div></section>`;
  const cs=uniq(D.map(r=>r.corr)).sort();let tb='';
  cs.forEach(c=>{const R=D.filter(r=>r.corr===c);tb+=`<tr class="grp" data-g="${c}"><td>${esc(c)}</td><td class="n">${nf(st2A(R))}</td><td class="n">${nf(st3A(R))}</td><td class="n">${nf(jatA(R))}</td><td class="n">${nf(acaA(R))}</td></tr>`;
   uniq(R.map(r=>r.site||'(Sem site)')).forEach(s=>{const Q=R.filter(r=>(r.site||'(Sem site)')===s);tb+=`<tr class="sub" hidden data-c="${esc(c)}"><td>${esc(s)}</td><td class="n">${nf(st2A(Q))}</td><td class="n">${nf(st3A(Q))}</td><td class="n">${nf(jatA(Q))}</td><td class="n">${nf(acaA(Q))}</td></tr>`})});
  h+=card('c7','Área por corredor (m²)',`<div class="tw"><table><thead><tr><th>Corredor</th><th class="n">Área ST2</th><th class="n">Área ST3</th><th class="n">Área Jateamento</th><th class="n">Área Acabamento</th></tr></thead><tbody>${tb}<tr class="tot"><td>Total</td><td class="n">${nf(st2A(D))}</td><td class="n">${nf(st3A(D))}</td><td class="n">${nf(jatA(D))}</td><td class="n">${nf(acaA(D))}</td></tr></tbody></table></div>`);
  h+=card('c5','Produção por efetivo',`<div class="kpis">${kpi(ef?prepA(D)/ef:null,'Área Preparação por Efetivo')}${kpi(ef||null,'Efetivo Disponível')}</div><div class="kpis" style="margin-top:12px">${kpi(ef?acaA(D)/ef:null,'Área Acabamento por Efetivo')}${kpiH(efs.length?Math.max(...efs.map(r=>r.n))*hDia(DAY):null,'HHT Disponível')}${ef?'':'<div class="note">Sem efetivo lançado para este dia na aba Efetivo.</div>'}`);
- const mM=M.exec.filter(r=>mm(r.d)===ym&&r.d<=DAY),yY=M.exec.filter(r=>mm(r.d).slice(0,4)===yr&&r.d<=DAY);
- const metaM=metaDe(new Set([ym])),metaY=metaDe(new Set(M.meta.filter(r=>r.ym.slice(0,4)===yr).map(r=>r.ym)));
+ const okC=r=>!CS.cor||r.corr===CS.cor;
+ const mM=M.exec.filter(r=>mm(r.d)===ym&&r.d<=DAY&&okC(r)),yY=M.exec.filter(r=>mm(r.d).slice(0,4)===yr&&r.d<=DAY&&okC(r));
+ const metaM=metaDe(new Set([ym]),corSet),metaY=metaDe(new Set(M.meta.filter(r=>r.ym.slice(0,4)===yr).map(r=>r.ym)),corSet);
  const pg=(t,v,m,col)=>`<div class="card prog"><span class="lbl" style="background:${col}">${t}</span><span class="big">${nf(v)} m²</span><div class="trk"><i style="width:${Math.min(100,m?v/m*100:0)}%;background:${col}"></i></div><div class="tg"><span>Target ${nf(m,0)} m²</span><span>${nf(m?v/m*100:null,1)}%</span></div></div>`;
- h+=`<div class="c5 sub4">${pg('Jateamento Mês',jatA(mM),metaM,C.teal)}${pg('Acabamento Mês',acaA(mM),metaM,C.amber)}${pg('Jateamento Ano',jatA(yY),metaY,C.teal)}${pg('Acabamento Ano',acaA(yY),metaY,C.amber)}</div>`;
+ h+=`<div class="c5 sub4">${pg('Jateamento Mês'+corTag,jatA(mM),metaM,C.teal)}${pg('Acabamento Mês'+corTag,acaA(mM),metaM,C.amber)}${pg('Jateamento Ano'+corTag,jatA(yY),metaY,C.teal)}${pg('Acabamento Ano'+corTag,acaA(yY),metaY,C.amber)}</div>`;
  h+=csCard();
  return h}
 
@@ -630,7 +640,9 @@ const ARQ_PRI='ativos_prioritarios.json';
 let PRI=null,PRI_SRC='',PRI_LOADING=true;
 const CS_MAX_DIAS=1100; // limite do intervalo da curva S (≈3 anos)
 const CS_CORR_PADRAO='Paraopeba Norte'; // corredor que a curva S abre selecionado (se existir nos dados); '' = todos
-const CS={ini:'',fim:'',grp:'',ov:{},open:false,cor:null};
+const CS={ini:'',fim:'',ats:new Set(),openAt:false,ov:{},open:false,cor:null,efD:3,efN:9,prod:META_PESSOA}; // efetivo por turno (dia/noite) e produtividade m²/pessoa/dia
+try{const g=JSON.parse(localStorage.getItem('painel-npe-cs-efetivo')||'null');if(g){['efD','efN','prod'].forEach(k=>{if(typeof g[k]==='number'&&g[k]>=0)CS[k]=g[k]})}}catch(e){}
+const csSalvaEf=()=>{try{localStorage.setItem('painel-npe-cs-efetivo',JSON.stringify({efD:CS.efD,efN:CS.efN,prod:CS.prod}))}catch(e){}};
 const p2=n=>String(n).padStart(2,'0');
 const addD=(a,k)=>{const d=new Date(a+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+k);return d.toISOString().slice(0,10)};
 const dow=d=>new Date(d+'T00:00:00Z').getUTCDay();
@@ -646,31 +658,45 @@ function csPadrao(){
 function csMeta(cor){ // mesma Meta Acumulada da Visão Geral, para o corredor escolhido
  const ref=M.exec.map(r=>r.d).sort().pop(),refYM=ref?mm(ref):'';
  return metaDe(new Set(M.meta.map(r=>r.ym).filter(y=>y<=(META_FIM_ANO[ANO]||refYM))),cor?new Set([cor]):null)}
-function csCard(){
- const tit=PRI&&CS.grp?`Curva S | ${esc(CS.grp)} – falta do escopo (%)`:'Curva S | Desvio meta – falta para fechar o ano (%)';
- csPadrao();
+function csCorInit(){ // corredor do Report Diário (cartões + curva S); abre em CS_CORR_PADRAO se existir
  const cors=uniq(M.meta.map(r=>r.corr).filter(Boolean)).sort();
  if(CS.cor===null)CS.cor=cors.includes(CS_CORR_PADRAO)?CS_CORR_PADRAO:'';if(CS.cor&&!cors.includes(CS.cor))CS.cor='';
- const grpOn=!!(PRI&&CS.grp&&PRI.ativos.some(a=>a.grupo===CS.grp)); // área escolhida = curva pelo escopo da área
- const Ag=grpOn?PRI.ativos.filter(a=>a.grupo===CS.grp):[];
+ return cors}
+function csCard(){
+ // Ativos prioritários selecionados (vazio = Desvio Meta). Uma área inteira marcada aparece pelo nome da área.
+ if(PRI){const abas=new Set(PRI.ativos.map(a=>a.aba));[...CS.ats].forEach(x=>{if(!abas.has(x))CS.ats.delete(x)})}else CS.ats.clear();
+ const selAt=PRI?PRI.ativos.filter(a=>CS.ats.has(a.aba)):[],grupos=PRI?uniq(PRI.ativos.map(a=>a.grupo)):[];
+ const selNome=(()=>{if(!selAt.length)return '';if(selAt.length===PRI.ativos.length)return 'Todos os ativos';
+  const parts=[];grupos.forEach(g=>{const all=PRI.ativos.filter(a=>a.grupo===g),sel=all.filter(a=>CS.ats.has(a.aba));if(!sel.length)return;if(sel.length===all.length)parts.push(g);else sel.forEach(a=>parts.push(a.nome))});
+  return parts.length>2?parts.length+' seleções':parts.join(' + ')})();
+ const tit=selAt.length?`Curva S | ${esc(selNome)} – falta do escopo (%)`:'Curva S | Desvio meta – falta para fechar o ano (%)';
+ csPadrao();
+ csCorInit();
+ const grpOn=selAt.length>0; // ativos escolhidos = curva pelo escopo deles
+ const Ag=selAt;
  const meta=grpOn?sum(Ag,a=>a.escopo):csMeta(CS.cor);
  const acaRows=grpOn?Ag.flatMap(a=>a.medicoes).filter(m=>m.d).map(m=>({d:m.d,area:m.a})):M.exec.filter(r=>r.etapa==='Acabamento'&&(!CS.cor||r.corr===CS.cor));
- const nomeBase=grpOn?`Escopo total (${esc(CS.grp)})`:`Meta acumulada${CS.cor?' ('+esc(CS.cor)+')':''}`;
+ const nomeBase=grpOn?`Escopo total (${esc(selNome)})`:`Meta acumulada${CS.cor?' ('+esc(CS.cor)+')':''}`;
  const dias=csDias(),uteis=dias.filter(x=>x.on).map(x=>x.d),N=uteis.length;
  const ddTxt=dias.length?`${N} dia${N===1?'':'s'} selecionado${N===1?'':'s'}`:'Intervalo inválido';
  const pn=dias.map(x=>`<label class="${x.w===0||x.w===6?'fds':''}"><input type="checkbox" data-csd="${x.d}" ${x.on?'checked':''}>${DSEM[x.w]} ${fd(x.d)}</label>`).join('');
- const grupos=PRI?uniq(PRI.ativos.map(a=>a.grupo)):[];if(CS.grp&&!grupos.includes(CS.grp))CS.grp='';
+ const atPn=PRI?grupos.map(g=>{const all=PRI.ativos.filter(a=>a.grupo===g),n=all.filter(a=>CS.ats.has(a.aba)).length;
+   return `<label style="font-weight:600"><input type="checkbox" data-csgrp="${esc(g)}" ${n===all.length?'checked':''} ${n&&n<all.length?'data-ind="1"':''}>${esc(g)} <span style="color:var(--muted);font-weight:400">(${all.length})</span></label>`
+    +all.map(a=>`<label style="padding-left:26px"><input type="checkbox" data-csat="${esc(a.aba)}" ${CS.ats.has(a.aba)?'checked':''}>${esc(a.nome.startsWith(g+' - ')?a.nome.slice(g.length+3):a.nome)}</label>`).join('')}).join(''):'';
+ post.push(()=>document.querySelectorAll('[data-ind]').forEach(x=>x.indeterminate=true));
  const ctl=`<div class="cs-ctl">
-  <label>Corredor<select id="csCor"${PRI&&CS.grp?' disabled title="Com uma área selecionada, a curva usa o escopo da área"':''}><option value="">Todos</option>${cors.map(c=>`<option value="${esc(c)}"${c===CS.cor?' selected':''}>${esc(c)}</option>`).join('')}</select></label>
   <label>Início<input type="date" id="csIni" value="${CS.ini}"></label>
   <label>Data limite<input type="date" id="csFim" value="${CS.fim}"></label>
   <div class="dd csdd"><label>Dias considerados</label><button type="button" data-csdd="1" aria-haspopup="true">${ddTxt}</button><div class="pn" ${CS.open?'':'hidden'} data-cspn="1"><button class="clr" type="button" data-csreset="1">Padrão (segunda a sexta)</button>${pn}</div></div>
-  ${PRI?`<label>Área (ativos prioritários)<select id="csGrp"><option value="">Desvio Meta</option>${grupos.map(g=>`<option value="${esc(g)}"${g===CS.grp?' selected':''}>${esc(g)}</option>`).join('')}</select></label>`:''}
+  <label title="Pessoas no turno do dia">Efetivo dia<input type="number" id="csEfD" min="0" max="500" step="1" value="${CS.efD}" style="width:64px"></label>
+  <label title="Pessoas no turno da noite">Efetivo noite<input type="number" id="csEfN" min="0" max="500" step="1" value="${CS.efN}" style="width:64px"></label>
+  <label title="Produtividade esperada por pessoa em um dia útil">m²/pessoa/dia<input type="number" id="csProd" min="0" max="1000" step="0.1" value="${CS.prod}" style="width:70px"></label>
+  ${PRI?`<div class="dd csatdd"><label>Ativos prioritários</label><button type="button" data-csatdd="1" aria-haspopup="true">${esc(selAt.length?selNome:'Nenhum (Desvio Meta)')}</button><div class="pn" ${CS.openAt?'':'hidden'} data-csatpn="1"><button class="clr" type="button" data-csatclr="1">Nenhum (usar Desvio Meta)</button><button class="clr" type="button" data-csatall="1">Selecionar todos</button>${atPn}</div></div>`:''}
  </div>`;
  // ativos prioritários: escopo total e realizado (informativo)
  let pri='';
- if(PRI){const A=PRI.ativos.filter(a=>!CS.grp||a.grupo===CS.grp),eT=sum(A,a=>a.escopo),rT=sum(A.flatMap(a=>a.medicoes).filter(m=>m.d&&(!DAY||m.d<=DAY)),m=>m.a);
-  pri=`<span>Ativos prioritários${CS.grp?' ('+esc(CS.grp)+')':''}: escopo total <b>${nf(eT)} m²</b> · realizado <b>${nf(rT)} m²</b> (${nf(eT?rT/eT*100:null,1)}%) · pendente <b>${nf(Math.max(0,eT-rT))} m²</b></span>`}
+ if(PRI){const A=selAt.length?selAt:PRI.ativos,eT=sum(A,a=>a.escopo),rT=sum(A.flatMap(a=>a.medicoes).filter(m=>m.d&&(!DAY||m.d<=DAY)),m=>m.a);
+  pri=`<span>Ativos prioritários${selAt.length?' ('+esc(selNome)+')':''}: escopo total <b>${nf(eT)} m²</b> · realizado <b>${nf(rT)} m²</b> (${nf(eT?rT/eT*100:null,1)}%) · pendente <b>${nf(Math.max(0,eT-rT))} m²</b></span>`}
  else if(!PRI_LOADING)pri=`<span>Arquivo ${ARQ_PRI} não encontrado.</span>`;
  // acumulados pré-calculados (busca binária) para não pesar com períodos longos
  const rs=[...acaRows].sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0),rd=rs.map(r=>r.d),rc=[];rs.reduce((s,r,i)=>(rc[i]=s+r.area),0);
@@ -680,59 +706,78 @@ function csCard(){
  const antes=CS.ini?realAte(addD(CS.ini,-1)):0,falta=Math.max(0,meta-antes);
  const ref0=DAY&&DAY<CS.fim?DAY:CS.fim,desvAtual=realAte(ref0)-meta;
  const totLin=`<span>${nomeBase} <b>${nf(meta)} m²</b> · realizado até ${fd(ref0)} <b>${nf(realAte(ref0))} m²</b> · desvio meta atual <b class="${desvAtual<0?'neg':''}">${nf(desvAtual)} m²</b></span>`;
- if(!N||!meta||!falta)return card('c7',tit,ctl+`<div class="empty">${!meta?(grpOn?'Sem escopo para a área selecionada.':'Sem meta acumulada para o ano.'):!falta?'Meta já atingida antes da data de início: não há desvio a recuperar.':'Nenhum dia selecionado no intervalo.'}</div><div class="cs-res">${totLin}${pri}</div>`);
+ if(!N||!meta||!falta)return card('c7 cs-card',tit,ctl+`<div class="empty">${!meta?(grpOn?'Sem escopo nos ativos selecionados.':'Sem meta acumulada para o ano.'):!falta?'Meta já atingida antes da data de início: não há desvio a recuperar.':'Nenhum dia selecionado no intervalo.'}</div><div class="cs-res">${totLin}${pri}</div>`);
  const base=falta/N,corte=ref0;
+ // Efetivo: divide a previsão por turno/pessoa e projeta o que o efetivo informado entrega
+ const efT=CS.efD+CS.efN,porPes=efT?base/efT:null,capDia=efT*CS.prod;
+ const turnos=v=>efT?`dia (${CS.efD}) <b>${nf(v*CS.efD/efT)} m²</b> · noite (${CS.efN}) <b>${nf(v*CS.efN/efT)} m²</b>`:'';
  const feitoAte=d=>realAte(d)-antes;                                    // realizado a partir do início
  const prevAte=d=>ub(uteis,d)*base;                                     // previsto acumulado sobre o desvio (m²)
+ const efAte=d=>Math.min(falta,ub(uteis,d)*capDia);                     // projeção pelo efetivo (m²), limitada à falta
  const uSet=new Set(uteis);
  const xs=uniq([...uteis,...acaRows.map(r=>r.d).filter(d=>d>=CS.ini&&d<=CS.fim)]).sort();
  const ultR=acaRows.map(r=>r.d).filter(d=>d<=corte).sort().pop();
  const info=xs.map(d=>{const prev=prevAte(d),ant=feitoAte(addD(d,-1)),hojeR=feitoAte(d)-ant,util=uSet.has(d);
-  return{d,prev,real:ultR&&d<=ultR?Math.max(0,feitoAte(d)):null,metaDia:util?Math.max(0,prev-ant):null,hojeR}});
+  return{d,prev,real:d<=corte?Math.max(0,feitoAte(d)):null,metaDia:util?Math.max(0,prev-ant):null,hojeR}});
+ const projEf=info.map(x=>+(efAte(x.d)/falta*100).toFixed(2));
  const plan=info.map(x=>+(x.prev/falta*100).toFixed(2)),real=info.map(x=>x.real==null?null:+(x.real/falta*100).toFixed(2));
  const iDay=xs.indexOf(DAY);
  const graf=ch(460,{
-  legend:{bottom:0,textStyle:{color:C.muted},icon:'roundRect',data:['Previsto','Realizado']},
+  legend:{bottom:0,textStyle:{color:C.muted},icon:'roundRect',data:['Previsto','Realizado',...(efT&&CS.prod?['Projeção pelo efetivo']:[])]},
   grid:{left:46,right:18,top:26,bottom:54},
   xAxis:ax({type:'category',data:xs.map(d=>xs[0].slice(0,4)!==xs[xs.length-1].slice(0,4)?fd(d).slice(0,6)+d.slice(2,4):fd(d).slice(0,5)),boundaryGap:false,splitLine:{show:false},axisLabel:{color:C.muted,hideOverlap:true}}),
   yAxis:ax({type:'value',min:0,max:v=>Math.max(100,Math.ceil(v.max/10)*10),axisLabel:{color:C.muted,formatter:v=>v+'%'}}),
   tooltip:{trigger:'axis',backgroundColor:C.card,borderColor:C.line,textStyle:{color:C.ink},confine:true,
    formatter:p=>{const x=info[p[0].dataIndex];return `<b>${DSEM[dow(x.d)]} ${fd(x.d)}</b>`
-    +p.map(s=>`<br>${s.marker}${s.seriesName}: <b>${s.value==null?'–':nf(s.value,1)+'%'}</b>${s.value==null?'':' ('+nf(s.value/100*falta)+' m²)'}`).join('')
-    +(x.metaDia!=null?`<br>Meta do dia (com pendência/excedente): <b>${nf(x.metaDia)} m²</b>`:'')
+    +p.map(s=>`<br>${s.marker}${s.seriesName==='Realizado'?'Realizado desde '+fd(CS.ini).slice(0,5):s.seriesName}: <b>${s.value==null?'–':nf(s.value,1)+'%'}</b>${s.value==null?'':' ('+nf(s.value/100*falta)+' m²)'}`).join('')
+    +(x.real!=null?`<br>Realizado total acumulado: <b>${nf(realAte(x.d))} m²</b> de ${nf(meta)} m²${antes?` (${nf(antes)} m² antes de ${fd(CS.ini).slice(0,5)})`:''}`:'')
+    +(x.metaDia!=null?`<br>Meta do dia (com pendência/excedente): <b>${nf(x.metaDia)} m²</b>${efT?`<br>&nbsp;&nbsp;→ ${turnos(x.metaDia)} · <b>${nf(x.metaDia/efT)} m²/pessoa</b>`:''}`:'')
     +`<br>${grpOn?'Medido':'Acabamento'} no dia: <b>${nf(x.hojeR)} m²</b>`}},
   series:[
    {name:'Previsto',type:'line',data:plan,symbol:'circle',symbolSize:4,lineStyle:{color:C.teal,width:3},itemStyle:{color:C.teal},
     label:{show:true,position:'top',color:C.ink,fontSize:11,formatter:p=>nf(p.value,0)+'%'},labelLayout:{hideOverlap:true},
     markLine:iDay>=0?{silent:true,symbol:'none',lineStyle:{color:C.muted,type:'dashed'},label:{formatter:'Dia do relatório',color:C.muted,fontSize:10},data:[{xAxis:iDay}]}:undefined},
    {name:'Realizado',type:'line',data:real,symbol:'circle',symbolSize:4,lineStyle:{color:C.amber,width:3},itemStyle:{color:C.amber},
-    label:{show:true,position:'bottom',color:C.amber,fontSize:10,formatter:p=>p.value==null?'':nf(p.value,0)+'%'},labelLayout:{hideOverlap:true}}]});
+    label:{show:true,position:'bottom',color:C.amber,fontSize:10,formatter:p=>p.value==null?'':nf(p.value,0)+'%'},labelLayout:{hideOverlap:true}},
+   ...(efT&&CS.prod?[{name:'Projeção pelo efetivo',type:'line',data:projEf,symbol:'none',lineStyle:{color:C.blue,width:2,type:'dashed'},itemStyle:{color:C.blue}}]:[])]});
  // situação no dia do relatório e meta do próximo dia útil
  const ref=corte,pR=prevAte(ref),rR=Math.max(0,feitoAte(ref)),saldo=rR-pR,prox=uteis.find(u=>u>ref);
  const metaProx=prox?Math.max(0,prevAte(prox)-rR):null;
  const res=`<div class="cs-res">
-  <span>Desvio meta em ${fd(CS.ini)} (falta para fechar) <b>${nf(falta)} m²</b> · ${N} dias · meta diária <b>${nf(base)} m²</b></span>
+  <span>${grpOn?'Falta do escopo':'Desvio meta'} em ${fd(CS.ini)} <b>${nf(falta)} m²</b>${antes?` (${nf(meta)} − ${nf(antes)} m² já realizados antes do início)`:''} · ${N} dias · meta diária <b>${nf(base)} m²</b></span>
   ${totLin}
-  <span>Em ${fd(ref)}: previsto <b>${nf(pR/falta*100,1)}%</b> (${nf(pR)} m²) · realizado <b>${nf(rR/falta*100,1)}%</b> (${nf(rR)} m²) · ${saldo<0?'pendente':'excedente'} <b class="${saldo<0?'neg':''}">${nf(Math.abs(saldo))} m²</b></span>
-  ${prox?`<span>Meta para ${fd(prox)}: <b>${nf(metaProx)} m²</b> (${nf(base)} ${saldo<0?'+ '+nf(-saldo)+' pendente':'− '+nf(saldo)+' excedente'})</span>`:''}
+  <span>Em ${fd(ref)}, contando a partir de ${fd(CS.ini)}: previsto <b>${nf(pR/falta*100,1)}%</b> (${nf(pR)} m²) · realizado <b>${nf(rR/falta*100,1)}%</b> (${nf(rR)} m²) · ${saldo<0?'pendente':'excedente'} <b class="${saldo<0?'neg':''}">${nf(Math.abs(saldo))} m²</b></span>
+  ${prox?`<span>Meta para ${fd(prox)}: <b>${nf(metaProx)} m²</b> (${nf(base)} ${saldo<0?'+ '+nf(-saldo)+' pendente':'− '+nf(saldo)+' excedente'})${efT?` → ${turnos(metaProx)} · <b>${nf(metaProx/efT)} m²/pessoa</b>`:''}</span>`:''}
+  ${efT?(()=>{const need=CS.prod?Math.ceil(base/CS.prod):null,fimEf=efAte(CS.fim),uteisRest=uteis.filter(u=>u>ref).length,faltaHoje=Math.max(0,falta-rR),capRest=uteisRest*capDia,ok=capRest>=faltaHoje;
+   return `<span>Efetivo total <b>${efT}</b> (dia ${CS.efD} · noite ${CS.efN}) · meta diária por pessoa <b>${nf(porPes)} m²</b> · capacidade do efetivo <b>${nf(capDia)} m²/dia</b> (${nf(CS.prod,1)} m²/pessoa)${need!=null?` · efetivo necessário para a meta diária <b>${need}</b>`:''}</span>
+   <span>Com ${efT} pessoas: faltam <b>${nf(faltaHoje)} m²</b> em ${uteisRest} dias úteis → precisa <b>${nf(uteisRest?faltaHoje/uteisRest:null)} m²/dia</b> (${nf(uteisRest&&efT?faltaHoje/uteisRest/efT:null)} m²/pessoa) · o efetivo entrega <b class="${ok?'':'neg'}">${nf(capRest)} m²</b> até ${fd(CS.fim)} ${ok?'(fecha a meta)':'(não fecha: faltariam '+nf(faltaHoje-capRest)+' m²)'}</span>`})():'<span>Informe o efetivo por turno para dividir a previsão.</span>'}
   ${pri}${PRI_SRC==='preview'?'<span><b>Ativos: pré-visualização local</b></span>':''}</div>`;
- return card('c7',tit,ctl+graf+res)}
+ return card('c7 cs-card',tit,ctl+graf+res)}
+function csReabreAt(st){if(!CS.openAt)return;const pn=document.querySelector('[data-csatpn]');if(pn){pn.hidden=false;pn.scrollTop=st}}
 function csReabre(st){if(!CS.open)return;const pn=document.querySelector('[data-cspn]');if(pn){pn.hidden=false;pn.scrollTop=st}}
 $('#main').addEventListener('click',e=>{
  const b=e.target.closest('[data-csdd]');
  if(b){const pn=b.nextElementSibling;pn.hidden=!pn.hidden;CS.open=!pn.hidden;return}
+ const ba=e.target.closest('[data-csatdd]');
+ if(ba){const pn=ba.nextElementSibling;pn.hidden=!pn.hidden;CS.openAt=!pn.hidden;return}
+ if(e.target.closest('[data-csatclr]')){CS.ats.clear();draw();csReabreAt(0);return}
+ if(e.target.closest('[data-csatall]')){PRI.ativos.forEach(a=>CS.ats.add(a.aba));draw();csReabreAt(0);return}
  if(e.target.closest('[data-csreset]')){const st=document.querySelector('[data-cspn]').scrollTop;CS.ov={};draw();csReabre(st)}});
 $('#main').addEventListener('change',e=>{const t=e.target;
  if(t.dataset.csd){const st=document.querySelector('[data-cspn]').scrollTop,w=dow(t.dataset.csd),def=w>=1&&w<=5;if(t.checked===def)delete CS.ov[t.dataset.csd];else CS.ov[t.dataset.csd]=t.checked;draw();csReabre(st);return}
- if(t.id==='csGrp'){CS.grp=t.value;draw()}
+ if(t.dataset.csat!=null||t.dataset.csgrp!=null){const st=document.querySelector('[data-csatpn]').scrollTop;
+  if(t.dataset.csat!=null){t.checked?CS.ats.add(t.dataset.csat):CS.ats.delete(t.dataset.csat)}
+  else PRI.ativos.filter(a=>a.grupo===t.dataset.csgrp).forEach(a=>t.checked?CS.ats.add(a.aba):CS.ats.delete(a.aba));
+  draw();csReabreAt(st);return}
  else if(t.id==='csCor'){CS.cor=t.value;draw()}
+ else if(t.id==='csEfD'||t.id==='csEfN'||t.id==='csProd'){const v=parseFloat(String(t.value).replace(',','.'));if(isNaN(v)||v<0)return;if(t.id==='csEfD')CS.efD=Math.round(v);else if(t.id==='csEfN')CS.efN=Math.round(v);else CS.prod=v;csSalvaEf();draw()}
  else if(t.id==='csIni'||t.id==='csFim'){
   // o campo de data dispara a cada dígito do ano (ex.: 0002); só aplica datas completas e razoáveis
   const v=t.value,y=+v.slice(0,4);if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||y<2000||y>2100)return;
   const ini=t.id==='csIni'?v:CS.ini,fim=t.id==='csFim'?v:CS.fim;
   if(ini&&fim&&(new Date(fim)-new Date(ini))/864e5>CS_MAX_DIAS){toast('Período muito longo: use no máximo 3 anos entre o início e a data limite.');return}
   if(t.id==='csIni')CS.ini=v;else CS.fim=v;draw()}});
-document.addEventListener('click',e=>{if(!e.target.closest('.csdd'))CS.open=false});
+document.addEventListener('click',e=>{if(!e.target.closest('.csdd'))CS.open=false;if(!e.target.closest('.csatdd'))CS.openAt=false});
 /* Lê a planilha de ativos prioritários (cada aba = 1 ativo): escopo na linha "ESCOPO TOTAL PREVISTO"; medições nas colunas E (data) e F (área) */
 function parsePri(wb){
  const out=[];
